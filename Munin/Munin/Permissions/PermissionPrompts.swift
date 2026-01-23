@@ -2,27 +2,6 @@ import AppKit
 
 enum PermissionPrompts {
 
-    static func showScreenRecordingAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Screen Recording Permission Required"
-        alert.informativeText = """
-            Munin needs Screen Recording permission to capture system audio.
-
-            Please grant permission in System Settings:
-            Privacy & Security → Screen Recording → Enable Munin
-
-            After enabling, you may need to restart Munin.
-            """
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Later")
-
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            openScreenRecordingSettings()
-        }
-    }
-
     static func showMicrophoneAlert() {
         let alert = NSAlert()
         alert.messageText = "Microphone Permission Required"
@@ -62,11 +41,6 @@ enum PermissionPrompts {
         } else {
             NSApp.terminate(nil)
         }
-    }
-
-    private static func openScreenRecordingSettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
-        NSWorkspace.shared.open(url)
     }
 
     private static func openMicrophoneSettings() {

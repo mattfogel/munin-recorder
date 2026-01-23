@@ -23,10 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func checkPermissionsOnLaunch() async {
         let checker = PermissionChecker()
 
-        if !checker.hasScreenRecordingPermission() {
-            PermissionPrompts.showScreenRecordingAlert()
-        }
-
+        // Request microphone permission on launch
+        // System audio capture via Core Audio Taps will prompt separately when recording starts
         if !checker.hasMicrophonePermission() {
             _ = await checker.requestMicrophonePermission()
         }

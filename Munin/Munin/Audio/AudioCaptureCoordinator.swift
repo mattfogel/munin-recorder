@@ -1,5 +1,4 @@
 import Foundation
-import ScreenCaptureKit
 import AVFoundation
 
 @MainActor

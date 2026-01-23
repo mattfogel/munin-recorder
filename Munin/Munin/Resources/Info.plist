@@ -26,7 +26,5 @@
     <string>NSApplication</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Munin needs microphone access to record your voice during meetings.</string>
-    <key>NSScreenCaptureUsageDescription</key>
-    <string>Munin needs screen recording permission to capture system audio during meetings.</string>
 </dict>
 </plist>
