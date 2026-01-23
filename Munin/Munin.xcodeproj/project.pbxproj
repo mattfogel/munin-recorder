@@ -381,7 +381,7 @@
 				DEVELOPMENT_TEAM = RT982W5HNA;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Munin/Resources/Info.plist;
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Munin needs microphone access to record your voice during meetings.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -409,7 +409,7 @@
 				DEVELOPMENT_TEAM = RT982W5HNA;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Munin/Resources/Info.plist;
-				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Munin needs microphone access to record your voice during meetings.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
