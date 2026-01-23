@@ -25,16 +25,22 @@ final class TranscriptionService {
     private let modelPath: String?
 
     init() {
-        // Try to find whisper binary
+        // Try to find whisper binary - prefer whisper-cli (main is deprecated)
         self.whisperPath = ProcessRunner.findExecutable(
-            name: "whisper-cpp",
+            name: "whisper-cli",
             additionalPaths: [
-                ProcessRunner.findExecutable(name: "main", additionalPaths: [
-                    NSHomeDirectory() + "/.munin/whisper.cpp/main",
-                    "/usr/local/bin/whisper"
-                ]) ?? ""
+                NSHomeDirectory() + "/.munin/whisper.cpp/whisper-cli",
+                "/opt/homebrew/bin/whisper-cli",
+                "/usr/local/bin/whisper-cli"
             ]
-        ) ?? ProcessRunner.findExecutable(name: "whisper")
+        ) ?? ProcessRunner.findExecutable(
+            name: "whisper",
+            additionalPaths: [
+                NSHomeDirectory() + "/.munin/whisper.cpp/whisper",
+                "/opt/homebrew/bin/whisper",
+                "/usr/local/bin/whisper"
+            ]
+        )
 
         // Try to find model
         self.modelPath = Self.findModel()

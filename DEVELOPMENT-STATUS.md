@@ -11,8 +11,13 @@ The app has a working window UI and core recording infrastructure. Menubar icon 
 ### App Structure
 - [x] Xcode project with SwiftUI + AppKit hybrid
 - [x] Window UI with Start/Stop recording button
+- [x] Real-time recording duration timer
+- [x] Granular processing status (Saving/Transcribing/Summarizing)
+- [x] Error display in UI for failed operations
+- [x] "Open Last Recording" button
+- [x] macOS notifications on completion
 - [x] App shows in Dock (LSUIElement=false for now)
-- [x] MenuBarExtra configured (but not appearing - macOS 15 bug)
+- [x] MenuBarExtra working (requires proper code signing)
 - [x] AppDelegate with permission checking
 
 ### Audio Capture
@@ -40,17 +45,29 @@ The app has a working window UI and core recording infrastructure. Menubar icon 
 
 ## Known Issues
 
-### 1. Menubar Icon Not Appearing
-- Tried NSStatusItem and SwiftUI MenuBarExtra
-- Both fail to display on macOS 15.6.1
-- Possibly related to notched MacBook displays
-- **Workaround**: Using window UI instead
-- **Status**: Deprioritized - window UI works
+### 1. Microphone Audio Quality (Slight Jitter) - PARTIALLY FIXED
+- **Symptom**: Mic audio has robotic/fuzzy artifacts when mixed with system audio
+- **Root cause**: Async arrival of system audio and mic with no timestamp alignment
+- **Fixes applied** (in AudioMixer.swift):
+  - Increased buffer size: 4096 → 8192 samples (~170ms) to absorb timing jitter
+  - High-quality resampling: `.max` quality + `AVSampleRateConverterAlgorithm_Mastering`
+  - Startup buffering: Wait for ~200ms from both sources before mixing
+  - Changed mixing condition: OR → AND (only mix when both have data, no silence padding)
+  - Crossfade at buffer boundaries: 64 samples (~1.3ms) to eliminate clicks
+- **If still problematic**, escalate to timestamp-based sync:
+  - Use `CMSampleBufferGetPresentationTimeStamp()` to align samples by time
+  - Implement a proper ring buffer with timestamp interpolation
+  - Consider separate tracks instead of real-time mixing
 
-### 2. Screen Recording Permission Loop
-- After rebuilding, TCC may not recognize the app
-- **Fix**: Remove app from Screen Recording list, clean build, re-grant permission
-- May need `tccutil reset ScreenCapture` in severe cases
+### 2. Menubar Icon Not Appearing - FIXED
+- **Cause**: Ad-hoc signing ("Sign to Run Locally")
+- **Fix**: Use a real Apple Developer signing identity (even free account works)
+- Go to Signing & Capabilities → set Team → enable "Automatically manage signing"
+- This also fixes permissions resetting on every build
+
+### 2. Screen Recording Permission Loop - FIXED
+- **Cause**: Ad-hoc signing caused TCC to see each build as a new app
+- **Fix**: Use proper code signing (same fix as menubar icon)
 
 ### 3. No App Icon
 - Asset catalog has placeholder, no actual icon images
@@ -93,22 +110,22 @@ Munin/
 ## Next Steps
 
 ### Immediate (to get recording working)
-1. [ ] Fix Screen Recording permission - clean rebuild, re-grant
-2. [ ] Verify audio capture works (check console for sample counts)
-3. [ ] Test full recording → stop → file saved flow
-4. [ ] Verify both system audio AND microphone are captured
+1. [x] Fix Screen Recording permission - clean rebuild, re-grant
+2. [x] Verify audio capture works (check console for sample counts)
+3. [x] Test full recording → stop → file saved flow
+4. [x] Verify both system audio AND microphone are captured
 
 ### Short-term
 5. [ ] Add app icon (create or generate PNG assets)
 6. [ ] Test transcription with whisper.cpp installed
 7. [ ] Test summarization with Claude CLI
-8. [ ] Add error display in UI for failed recordings
+8. [x] Add error display in UI for failed recordings
 
 ### Medium-term
-9. [ ] Investigate menubar icon issue further (or accept window-only UI)
-10. [ ] Add recording duration timer that updates in real-time
-11. [ ] Add "Open Meetings Folder" that shows the specific recording
-12. [ ] Add notification when processing completes
+9. [x] ~~Investigate menubar icon issue~~ Fixed by using proper code signing
+10. [x] Add recording duration timer that updates in real-time
+11. [x] Add "Open Last Recording" button that shows specific recording
+12. [x] Add notification when processing completes
 
 ### Future (from original spec)
 - Calendar integration (EventKit)

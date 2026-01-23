@@ -42,11 +42,20 @@ struct ContentView: View {
 
             controlButton
 
-            Button("Open Meetings Folder") {
-                let storage = MeetingStorage()
-                NSWorkspace.shared.open(storage.meetingsDirectory)
+            HStack(spacing: 16) {
+                if let lastURL = appState.lastRecordingURL {
+                    Button("Open Last Recording") {
+                        NSWorkspace.shared.open(lastURL)
+                    }
+                    .buttonStyle(.link)
+                }
+
+                Button("Open Meetings Folder") {
+                    let storage = MeetingStorage()
+                    NSWorkspace.shared.open(storage.meetingsDirectory)
+                }
+                .buttonStyle(.link)
             }
-            .buttonStyle(.link)
         }
         .padding(30)
         .frame(minWidth: 280, minHeight: 180)
@@ -63,17 +72,28 @@ struct ContentView: View {
             Label("Recording: \(formatDuration(displayedDuration))", systemImage: "record.circle.fill")
                 .foregroundColor(.red)
                 .onAppear { startTimer() }
-        case .processing:
-            Label("Processing...", systemImage: "gear")
+        case .processing(let phase):
+            Label(processingLabel(for: phase), systemImage: "gear")
                 .foregroundColor(.orange)
                 .onAppear { stopTimer() }
         }
     }
 
+    private func processingLabel(for phase: AppState.RecordingState.ProcessingPhase) -> String {
+        switch phase {
+        case .saving: return "Saving audio..."
+        case .transcribing: return "Transcribing..."
+        case .summarizing: return "Summarizing..."
+        }
+    }
+
     private func startTimer() {
         displayedDuration = appState.recordingDuration
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            displayedDuration = appState.recordingDuration
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak appState] _ in
+            Task { @MainActor in
+                guard let appState else { return }
+                displayedDuration = appState.recordingDuration
+            }
         }
     }
 
@@ -146,8 +166,8 @@ struct MenuBarView: View {
             }
             .keyboardShortcut("s")
 
-        case .processing:
-            Text("Processing...")
+        case .processing(let phase):
+            Text(processingLabel(for: phase))
                 .foregroundColor(.secondary)
         }
 
@@ -165,6 +185,14 @@ struct MenuBarView: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    private func processingLabel(for phase: AppState.RecordingState.ProcessingPhase) -> String {
+        switch phase {
+        case .saving: return "Saving audio..."
+        case .transcribing: return "Transcribing..."
+        case .summarizing: return "Summarizing..."
+        }
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {

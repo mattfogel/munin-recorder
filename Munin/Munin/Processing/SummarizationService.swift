@@ -60,14 +60,11 @@ final class SummarizationService {
             \(transcript)
             """
 
-        // Run claude CLI with the prompt
+        // Run claude CLI with the prompt (-p for print mode, outputs just the response)
         let result = try await ProcessRunner.run(
             executablePath: claudePath,
-            arguments: [
-                "--print",  // Just print the response
-                "-p", prompt
-            ],
-            timeout: 120 // 2 minutes should be enough for summarization
+            arguments: ["-p", prompt],
+            timeout: 300 // 5 minutes for long transcripts
         )
 
         // Check for authentication issues

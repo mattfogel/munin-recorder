@@ -5,10 +5,15 @@ import CoreMedia
 final class SystemAudioCapture: NSObject, SCStreamDelegate, SCStreamOutput {
     private var stream: SCStream?
     private var filter: SCContentFilter?
-    private let audioHandler: (CMSampleBuffer) -> Void
+    private let systemAudioHandler: (CMSampleBuffer) -> Void
+    private let microphoneHandler: (CMSampleBuffer) -> Void
 
-    init(audioHandler: @escaping (CMSampleBuffer) -> Void) async throws {
-        self.audioHandler = audioHandler
+    init(
+        systemAudioHandler: @escaping (CMSampleBuffer) -> Void,
+        microphoneHandler: @escaping (CMSampleBuffer) -> Void
+    ) async throws {
+        self.systemAudioHandler = systemAudioHandler
+        self.microphoneHandler = microphoneHandler
         super.init()
 
         // Get available content
@@ -72,13 +77,13 @@ final class SystemAudioCapture: NSObject, SCStreamDelegate, SCStreamOutput {
             if audioSampleCount % 100 == 1 {
                 print("Munin: System audio samples received: \(audioSampleCount)")
             }
-            audioHandler(sampleBuffer)
+            systemAudioHandler(sampleBuffer)
         case .microphone:
             micSampleCount += 1
             if micSampleCount % 100 == 1 {
                 print("Munin: Microphone samples received: \(micSampleCount)")
             }
-            audioHandler(sampleBuffer)
+            microphoneHandler(sampleBuffer)
         default:
             break
         }

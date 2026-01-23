@@ -6,12 +6,19 @@ final class AppState: ObservableObject {
     enum RecordingState: Equatable {
         case idle
         case recording
-        case processing
+        case processing(ProcessingPhase)
+
+        enum ProcessingPhase: Equatable {
+            case saving
+            case transcribing
+            case summarizing
+        }
     }
 
     @Published private(set) var state: RecordingState = .idle
     @Published private(set) var recordingStartTime: Date?
     @Published private(set) var currentMeetingName: String = "unknown-meeting"
+    @Published private(set) var lastRecordingURL: URL?
 
     private var audioCaptureCoordinator: AudioCaptureCoordinator?
     private var currentMeetingRecord: MeetingRecord?
@@ -53,12 +60,14 @@ final class AppState: ObservableObject {
     func stopRecording() async {
         guard state == .recording else { return }
 
-        state = .processing
+        state = .processing(.saving)
+        lastError = nil
 
         await audioCaptureCoordinator?.stopCapture()
         audioCaptureCoordinator = nil
 
         if let record = currentMeetingRecord {
+            lastRecordingURL = record.folderURL
             await processRecording(record: record)
         }
 
@@ -69,26 +78,42 @@ final class AppState: ObservableObject {
 
     private func processRecording(record: MeetingRecord) async {
         // Phase 2: Transcription
+        state = .processing(.transcribing)
         let transcriptionService = TranscriptionService()
         let transcriptURL = record.transcriptURL
 
         do {
             try await transcriptionService.transcribe(audioURL: record.audioURL, outputURL: transcriptURL)
-
-            // Phase 3: Summarization
-            let summarizationService = SummarizationService()
-            try await summarizationService.summarize(transcriptURL: transcriptURL, outputURL: record.summaryURL)
         } catch {
-            print("Processing error: \(error)")
+            print("Transcription error: \(error)")
+            lastError = error.localizedDescription
+            showCompletionNotification(record: record, error: "Transcription failed")
+            return
         }
 
-        showCompletionNotification(record: record)
+        // Phase 3: Summarization
+        state = .processing(.summarizing)
+        let summarizationService = SummarizationService()
+        do {
+            try await summarizationService.summarize(transcriptURL: transcriptURL, outputURL: record.summaryURL)
+        } catch {
+            print("Summarization error: \(error)")
+            // Non-fatal - transcript is still saved
+            lastError = "Summarization skipped: \(error.localizedDescription)"
+        }
+
+        showCompletionNotification(record: record, error: nil)
     }
 
-    private func showCompletionNotification(record: MeetingRecord) {
+    private func showCompletionNotification(record: MeetingRecord, error: String?) {
         let content = UNMutableNotificationContent()
-        content.title = "Meeting Processed"
-        content.body = "Recording saved to \(record.folderURL.lastPathComponent)"
+        if let error = error {
+            content.title = "Processing Failed"
+            content.body = error
+        } else {
+            content.title = "Meeting Processed"
+            content.body = "Recording saved to \(record.folderURL.lastPathComponent)"
+        }
         content.sound = .default
 
         let request = UNNotificationRequest(
