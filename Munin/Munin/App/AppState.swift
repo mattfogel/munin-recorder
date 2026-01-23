@@ -21,17 +21,30 @@ final class AppState: ObservableObject {
         return Date().timeIntervalSince(startTime)
     }
 
+    @Published var lastError: String?
+
     func startRecording(meetingName: String? = nil) async throws {
         guard state == .idle else { return }
 
+        lastError = nil
         currentMeetingName = meetingName ?? "unknown-meeting"
+
+        print("Munin: Starting recording...")
 
         let storage = MeetingStorage()
         let record = try storage.createMeetingFolder(name: currentMeetingName)
         currentMeetingRecord = record
+        print("Munin: Created folder at \(record.folderURL.path)")
 
         audioCaptureCoordinator = AudioCaptureCoordinator()
-        try await audioCaptureCoordinator?.startCapture(outputURL: record.audioURL)
+        do {
+            try await audioCaptureCoordinator?.startCapture(outputURL: record.audioURL)
+            print("Munin: Audio capture started successfully")
+        } catch {
+            lastError = error.localizedDescription
+            print("Munin: Failed to start audio capture: \(error)")
+            throw error
+        }
 
         recordingStartTime = Date()
         state = .recording

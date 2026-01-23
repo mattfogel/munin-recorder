@@ -3,7 +3,7 @@ import Combine
 
 @MainActor
 final class StatusBarController {
-    private var statusItem: NSStatusItem?
+    private var statusItem: NSStatusItem!
     private let appState: AppState
     private var menuBuilder: MenuBuilder?
     private var cancellables = Set<AnyCancellable>()
@@ -16,14 +16,33 @@ final class StatusBarController {
     }
 
     private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
-        guard let button = statusItem?.button else { return }
-        button.image = NSImage(systemSymbolName: "waveform.circle", accessibilityDescription: "Munin")
-        button.image?.isTemplate = true
+        if let button = statusItem.button {
+            // Try system symbol image
+            let config = NSImage.SymbolConfiguration(pointSize: 16, weight: .regular)
+            if let image = NSImage(systemSymbolName: "mic.circle.fill", accessibilityDescription: "Munin")?
+                .withSymbolConfiguration(config) {
+                button.image = image
+                button.image?.isTemplate = true
+                print("Munin: Set image on button")
+            } else {
+                // Fallback: create a simple colored image
+                let size = NSSize(width: 18, height: 18)
+                let image = NSImage(size: size, flipped: false) { rect in
+                    NSColor.red.setFill()
+                    NSBezierPath(ovalIn: rect.insetBy(dx: 2, dy: 2)).fill()
+                    return true
+                }
+                button.image = image
+                print("Munin: Set fallback red circle image")
+            }
+        }
 
         menuBuilder = MenuBuilder(appState: appState)
-        statusItem?.menu = menuBuilder?.buildMenu()
+        statusItem.menu = menuBuilder?.buildMenu()
+
+        print("Munin: Setup complete - button: \(String(describing: statusItem.button)), image: \(String(describing: statusItem.button?.image))")
     }
 
     private func observeState() {
@@ -40,18 +59,39 @@ final class StatusBarController {
     private func updateIcon(for state: AppState.RecordingState) {
         guard let button = statusItem?.button else { return }
 
+        // Reset tint color
+        button.contentTintColor = nil
+
         switch state {
         case .idle:
-            button.image = NSImage(systemSymbolName: "waveform.circle", accessibilityDescription: "Munin - Idle")
-            button.image?.isTemplate = true
+            if let image = NSImage(systemSymbolName: "waveform.circle", accessibilityDescription: "Munin - Idle") {
+                button.image = image
+                button.image?.isTemplate = true
+                button.title = ""
+            } else {
+                button.image = nil
+                button.title = "●"
+            }
 
         case .recording:
-            button.image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: "Munin - Recording")
-            button.contentTintColor = .systemRed
+            if let image = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: "Munin - Recording") {
+                button.image = image
+                button.contentTintColor = .systemRed
+                button.title = ""
+            } else {
+                button.image = nil
+                button.title = "⏺"
+            }
 
         case .processing:
-            button.image = NSImage(systemSymbolName: "gear.circle", accessibilityDescription: "Munin - Processing")
-            button.image?.isTemplate = true
+            if let image = NSImage(systemSymbolName: "gear.circle", accessibilityDescription: "Munin - Processing") {
+                button.image = image
+                button.image?.isTemplate = true
+                button.title = ""
+            } else {
+                button.image = nil
+                button.title = "⚙"
+            }
         }
     }
 

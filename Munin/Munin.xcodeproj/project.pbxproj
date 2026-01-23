@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A10000010000000000000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000001 /* main.swift */; };
+		A10000010000000000000020 /* MuninApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000020 /* MuninApp.swift */; };
 		A10000010000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000002 /* AppDelegate.swift */; };
 		A10000010000000000000003 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000003 /* AppState.swift */; };
 		A10000010000000000000004 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000004 /* StatusBarController.swift */; };
@@ -27,7 +27,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A20000010000000000000001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		A20000010000000000000020 /* MuninApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuninApp.swift; sourceTree = "<group>"; };
 		A20000010000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A20000010000000000000003 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		A20000010000000000000004 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
@@ -94,7 +94,7 @@
 		A40000010000000000000004 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				A20000010000000000000001 /* main.swift */,
+				A20000010000000000000020 /* MuninApp.swift */,
 				A20000010000000000000002 /* AppDelegate.swift */,
 				A20000010000000000000003 /* AppState.swift */,
 			);
@@ -227,7 +227,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000010000000000000001 /* main.swift in Sources */,
+				A10000010000000000000020 /* MuninApp.swift in Sources */,
 				A10000010000000000000002 /* AppDelegate.swift in Sources */,
 				A10000010000000000000003 /* AppState.swift in Sources */,
 				A10000010000000000000004 /* StatusBarController.swift in Sources */,

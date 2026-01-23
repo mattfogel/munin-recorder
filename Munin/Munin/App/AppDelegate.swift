@@ -2,11 +2,10 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var statusBarController: StatusBarController?
-    private let appState = AppState()
+    let appState = AppState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusBarController = StatusBarController(appState: appState)
+        print("Munin: applicationDidFinishLaunching")
 
         Task {
             await checkPermissionsOnLaunch()

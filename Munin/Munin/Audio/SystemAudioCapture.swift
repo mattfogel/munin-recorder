@@ -42,8 +42,16 @@ final class SystemAudioCapture: NSObject, SCStreamDelegate, SCStreamOutput {
             throw AudioCaptureError.streamNotInitialized
         }
 
-        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: DispatchQueue(label: "com.munin.audio"))
+        let audioQueue = DispatchQueue(label: "com.munin.audio")
+        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: audioQueue)
+
+        // macOS 15+: microphone audio comes through separate output type
+        if #available(macOS 15.0, *) {
+            try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: audioQueue)
+        }
+
         try await stream.startCapture()
+        print("Munin: Audio capture started")
     }
 
     func stopCapture() async {
@@ -53,9 +61,27 @@ final class SystemAudioCapture: NSObject, SCStreamDelegate, SCStreamOutput {
 
     // MARK: - SCStreamOutput
 
+    private var audioSampleCount = 0
+    private var micSampleCount = 0
+
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard type == .audio else { return }
-        audioHandler(sampleBuffer)
+        // Handle both system audio and microphone audio (macOS 15+)
+        switch type {
+        case .audio:
+            audioSampleCount += 1
+            if audioSampleCount % 100 == 1 {
+                print("Munin: System audio samples received: \(audioSampleCount)")
+            }
+            audioHandler(sampleBuffer)
+        case .microphone:
+            micSampleCount += 1
+            if micSampleCount % 100 == 1 {
+                print("Munin: Microphone samples received: \(micSampleCount)")
+            }
+            audioHandler(sampleBuffer)
+        default:
+            break
+        }
     }
 
     // MARK: - SCStreamDelegate
