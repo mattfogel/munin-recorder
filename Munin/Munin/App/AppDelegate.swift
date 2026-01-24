@@ -34,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         if settings.authorizationStatus == .notDetermined {
-            try? await center.requestAuthorization(options: [.alert, .sound])
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
         }
     }
 }

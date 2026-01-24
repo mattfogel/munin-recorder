@@ -3,15 +3,72 @@ import AVFoundation
 import CoreMedia
 import Accelerate
 
-/// Mixes system audio and microphone audio using direct sample mixing with Accelerate
-final class AudioMixer: @unchecked Sendable {
-    // Output format: 48kHz mono float32
-    private let sampleRate: Double = 48000
-    private let channelCount: UInt32 = 1
+/// Soft limiter with fast attack, slow release to prevent clipping without distortion
+private final class SoftLimiter {
+    private let threshold: Float = 0.5  // -6dB
+    private let knee: Float = 0.2       // Soft transition range
+    private let ratio: Float = 8.0      // 8:1 compression above threshold
+    private var envelope: Float = 0     // Peak follower
 
-    // Volume levels - prioritize voice clarity for transcription
-    private let systemAudioGain: Float = 0.65
+    // Attack/release coefficients for 48kHz
+    // Attack: ~2ms = 96 samples, coef ≈ 1 - exp(-1/96) ≈ 0.01
+    // Release: ~50ms = 2400 samples, coef ≈ 1 - exp(-1/2400) ≈ 0.0004
+    private let attackCoef: Float = 0.01
+    private let releaseCoef: Float = 0.0004
+
+    func process(_ samples: inout [Float]) {
+        for i in samples.indices {
+            let absVal = abs(samples[i])
+
+            // Peak follower with fast attack, slow release
+            if absVal > envelope {
+                envelope = attackCoef * absVal + (1 - attackCoef) * envelope
+            } else {
+                envelope = releaseCoef * absVal + (1 - releaseCoef) * envelope
+            }
+
+            // Soft knee gain reduction
+            let kneeStart = threshold - knee / 2
+            let kneeEnd = threshold + knee / 2
+
+            if envelope > kneeStart {
+                let gain: Float
+                if envelope < kneeEnd {
+                    // In the knee region - smooth transition
+                    let kneeProgress = (envelope - kneeStart) / knee
+                    let compressionAmount = kneeProgress * kneeProgress / 2
+                    let overshoot = envelope - threshold
+                    let reduction = overshoot * (1 - 1 / ratio) * compressionAmount
+                    gain = (envelope - reduction) / envelope
+                } else {
+                    // Above knee - full compression
+                    let overshoot = envelope - threshold
+                    let compressed = threshold + overshoot / ratio
+                    gain = compressed / envelope
+                }
+                samples[i] *= gain
+            }
+        }
+    }
+
+    func reset() {
+        envelope = 0
+    }
+}
+
+/// Outputs stereo audio: Left = Mic, Right = System for diarization
+final class AudioMixer: @unchecked Sendable {
+    // Output format: 48kHz stereo float32
+    private let sampleRate: Double = 48000
+    private let channelCount: UInt32 = 2
+
+    // Unity gain - soft limiter handles levels
+    private let systemAudioGain: Float = 1.0
     private let microphoneGain: Float = 1.0
+
+    // Soft limiters (one per channel)
+    private let micLimiter = SoftLimiter()
+    private let systemLimiter = SoftLimiter()
 
     // Ring buffers for each source
     private var systemBuffer: [Float] = []
@@ -40,18 +97,19 @@ final class AudioMixer: @unchecked Sendable {
     private var systemAudioConverter: AVAudioConverter?
     private var microphoneConverter: AVAudioConverter?
     private lazy var outputFormat: AVAudioFormat = {
-        AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channelCount)!
+        // Mono format for input conversion (before stereo interleaving)
+        AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
     }()
 
     init() throws {
-        // Create output format description
+        // Create output format description - stereo interleaved float32
         var asbd = AudioStreamBasicDescription(
             mSampleRate: sampleRate,
             mFormatID: kAudioFormatLinearPCM,
             mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
-            mBytesPerPacket: 4,
+            mBytesPerPacket: 8,  // 2 channels × 4 bytes
             mFramesPerPacket: 1,
-            mBytesPerFrame: 4,
+            mBytesPerFrame: 8,   // 2 channels × 4 bytes
             mChannelsPerFrame: channelCount,
             mBitsPerChannel: 32,
             mReserved: 0
@@ -134,9 +192,9 @@ final class AudioMixer: @unchecked Sendable {
             return nil
         }
 
-        // Check if we need conversion
+        // Check if we need conversion (input is mono, output is stereo interleaved later)
         let needsConversion = sourceFormat.sampleRate != sampleRate ||
-                             sourceFormat.channelCount != channelCount ||
+                             sourceFormat.channelCount != 1 ||
                              sourceFormat.commonFormat != .pcmFormatFloat32
 
         if !needsConversion {
@@ -248,39 +306,37 @@ final class AudioMixer: @unchecked Sendable {
             }
         }
 
-        // Mix only when BOTH sources have enough data
+        // Process only when BOTH sources have enough data
         // This prevents silence padding which causes discontinuities
         while systemBuffer.count >= bufferSize && micBuffer.count >= bufferSize {
-            var mixedSamples = [Float](repeating: 0, count: bufferSize)
-
             // Extract exactly bufferSize samples from each source
-            let systemSamples = Array(systemBuffer.prefix(bufferSize))
+            var systemSamples = Array(systemBuffer.prefix(bufferSize))
             systemBuffer.removeFirst(bufferSize)
 
-            let micSamples = Array(micBuffer.prefix(bufferSize))
+            var micSamples = Array(micBuffer.prefix(bufferSize))
             micBuffer.removeFirst(bufferSize)
 
-            // Mix: add system audio
-            vDSP_vadd(mixedSamples, 1, systemSamples, 1, &mixedSamples, 1, vDSP_Length(bufferSize))
+            // Apply soft limiting per channel (prevents clipping without distortion)
+            micLimiter.process(&micSamples)
+            systemLimiter.process(&systemSamples)
 
-            // Mix: add microphone audio
-            vDSP_vadd(mixedSamples, 1, micSamples, 1, &mixedSamples, 1, vDSP_Length(bufferSize))
+            // Interleave to stereo: Left = Mic, Right = System
+            var stereoSamples = [Float](repeating: 0, count: bufferSize * 2)
+            for i in 0..<bufferSize {
+                stereoSamples[i * 2] = micSamples[i]       // Left channel
+                stereoSamples[i * 2 + 1] = systemSamples[i] // Right channel
+            }
 
             // Apply crossfade from previous buffer to smooth transitions
             if !previousOutputTail.isEmpty {
-                applyCrossfade(from: previousOutputTail, to: &mixedSamples)
+                applyCrossfade(from: previousOutputTail, to: &stereoSamples)
             }
 
-            // Clip to prevent distortion
-            var minVal: Float = -1.0
-            var maxVal: Float = 1.0
-            vDSP_vclip(mixedSamples, 1, &minVal, &maxVal, &mixedSamples, 1, vDSP_Length(bufferSize))
-
-            // Save tail for next crossfade
-            previousOutputTail = Array(mixedSamples.suffix(crossfadeLength))
+            // Save tail for next crossfade (stereo samples)
+            previousOutputTail = Array(stereoSamples.suffix(crossfadeLength * 2))
 
             // Create output sample buffer
-            if let sampleBuffer = createOutputSampleBuffer(from: mixedSamples) {
+            if let sampleBuffer = createOutputSampleBuffer(from: stereoSamples) {
                 outputHandler?(sampleBuffer)
             }
         }
@@ -302,8 +358,9 @@ final class AudioMixer: @unchecked Sendable {
     private func createOutputSampleBuffer(from samples: [Float]) -> CMSampleBuffer? {
         guard let formatDescription = outputFormatDescription else { return nil }
 
-        let frameCount = samples.count
-        let dataSize = frameCount * MemoryLayout<Float>.size
+        // For stereo, frame count is sample count / 2
+        let frameCount = samples.count / Int(channelCount)
+        let dataSize = samples.count * MemoryLayout<Float>.size
 
         // Create block buffer
         var blockBuffer: CMBlockBuffer?
@@ -362,24 +419,26 @@ final class AudioMixer: @unchecked Sendable {
             // Process any remaining samples - use the smaller of the two to avoid padding
             let remaining = min(self.systemBuffer.count, self.micBuffer.count)
             if remaining > 0 {
-                var mixedSamples = [Float](repeating: 0, count: remaining)
+                var systemSamples = Array(self.systemBuffer.prefix(remaining))
+                var micSamples = Array(self.micBuffer.prefix(remaining))
 
-                let systemSamples = Array(self.systemBuffer.prefix(remaining))
-                let micSamples = Array(self.micBuffer.prefix(remaining))
+                // Apply soft limiting
+                self.micLimiter.process(&micSamples)
+                self.systemLimiter.process(&systemSamples)
 
-                vDSP_vadd(mixedSamples, 1, systemSamples, 1, &mixedSamples, 1, vDSP_Length(remaining))
-                vDSP_vadd(mixedSamples, 1, micSamples, 1, &mixedSamples, 1, vDSP_Length(remaining))
+                // Interleave to stereo: Left = Mic, Right = System
+                var stereoSamples = [Float](repeating: 0, count: remaining * 2)
+                for i in 0..<remaining {
+                    stereoSamples[i * 2] = micSamples[i]
+                    stereoSamples[i * 2 + 1] = systemSamples[i]
+                }
 
                 // Apply crossfade from previous buffer
                 if !self.previousOutputTail.isEmpty {
-                    self.applyCrossfade(from: self.previousOutputTail, to: &mixedSamples)
+                    self.applyCrossfade(from: self.previousOutputTail, to: &stereoSamples)
                 }
 
-                var minVal: Float = -1.0
-                var maxVal: Float = 1.0
-                vDSP_vclip(mixedSamples, 1, &minVal, &maxVal, &mixedSamples, 1, vDSP_Length(remaining))
-
-                if let sampleBuffer = self.createOutputSampleBuffer(from: mixedSamples) {
+                if let sampleBuffer = self.createOutputSampleBuffer(from: stereoSamples) {
                     self.outputHandler?(sampleBuffer)
                 }
             }
@@ -390,6 +449,8 @@ final class AudioMixer: @unchecked Sendable {
             self.previousOutputTail.removeAll()
             self.startupComplete = false
             self.outputSampleTime = 0
+            self.micLimiter.reset()
+            self.systemLimiter.reset()
         }
     }
 }

@@ -1,5 +1,17 @@
 import Foundation
 
+/// Represents a timestamped segment from whisper transcription
+private struct TranscriptSegment: Comparable {
+    let startMs: Int
+    let endMs: Int
+    let speaker: String  // "Me" or "Them"
+    let text: String
+
+    static func < (lhs: TranscriptSegment, rhs: TranscriptSegment) -> Bool {
+        lhs.startMs < rhs.startMs
+    }
+}
+
 final class TranscriptionService {
     enum TranscriptionError: Error, LocalizedError {
         case whisperNotFound
@@ -55,66 +67,225 @@ final class TranscriptionService {
             throw TranscriptionError.modelNotFound
         }
 
-        // Convert m4a to wav for whisper.cpp
-        let wavURL = audioURL.deletingPathExtension().appendingPathExtension("wav")
-        try await convertToWav(inputURL: audioURL, outputURL: wavURL)
+        let baseDir = audioURL.deletingLastPathComponent()
+        let micWavURL = baseDir.appendingPathComponent("mic.wav")
+        let systemWavURL = baseDir.appendingPathComponent("system.wav")
 
-        // Run whisper.cpp
+        // Split stereo m4a into separate mono wav files (L=mic, R=system)
+        try await splitStereoToMono(inputURL: audioURL, micURL: micWavURL, systemURL: systemWavURL)
+
+        // Transcribe both channels with timestamps
+        async let micVtt = transcribeChannel(whisperPath: whisperPath, modelPath: modelPath, wavURL: micWavURL, speaker: "Me")
+        async let systemVtt = transcribeChannel(whisperPath: whisperPath, modelPath: modelPath, wavURL: systemWavURL, speaker: "Them")
+
+        let (micSegments, systemSegments) = try await (micVtt, systemVtt)
+
+        // Merge and format transcript
+        let merged = mergeTranscripts(mic: micSegments, system: systemSegments)
+        try formatDiarizedTranscript(segments: merged, outputURL: outputURL)
+
+        // Clean up temp files
+        try? FileManager.default.removeItem(at: micWavURL)
+        try? FileManager.default.removeItem(at: systemWavURL)
+    }
+
+    /// Split stereo m4a into two mono wav files using afconvert
+    /// Two-step process: m4a → stereo wav → split channels (afconvert crashes on direct AAC channel extraction)
+    private func splitStereoToMono(inputURL: URL, micURL: URL, systemURL: URL) async throws {
+        let afconvertPath = "/usr/bin/afconvert"
+        let stereoWavURL = inputURL.deletingLastPathComponent().appendingPathComponent("stereo_temp.wav")
+
+        // Step 1: Convert m4a to stereo wav at 16kHz
+        let stereoResult = try await ProcessRunner.run(
+            executablePath: afconvertPath,
+            arguments: [
+                "-f", "WAVE",
+                "-d", "LEI16@16000",
+                inputURL.path,
+                stereoWavURL.path
+            ],
+            timeout: 300
+        )
+
+        if !stereoResult.success {
+            throw TranscriptionError.conversionFailed
+        }
+
+        defer { try? FileManager.default.removeItem(at: stereoWavURL) }
+
+        // Step 2: Extract left channel (mic) from stereo wav
+        let micResult = try await ProcessRunner.run(
+            executablePath: afconvertPath,
+            arguments: [
+                "-f", "WAVE",
+                "-d", "LEI16@16000",
+                "-c", "1",
+                "-m", "0",
+                stereoWavURL.path,
+                micURL.path
+            ],
+            timeout: 300
+        )
+
+        if !micResult.success {
+            throw TranscriptionError.conversionFailed
+        }
+
+        // Step 3: Extract right channel (system) from stereo wav
+        let systemResult = try await ProcessRunner.run(
+            executablePath: afconvertPath,
+            arguments: [
+                "-f", "WAVE",
+                "-d", "LEI16@16000",
+                "-c", "1",
+                "-m", "1",
+                stereoWavURL.path,
+                systemURL.path
+            ],
+            timeout: 300
+        )
+
+        if !systemResult.success {
+            throw TranscriptionError.conversionFailed
+        }
+    }
+
+    /// Transcribe a single channel and return parsed segments
+    private func transcribeChannel(
+        whisperPath: String,
+        modelPath: String,
+        wavURL: URL,
+        speaker: String
+    ) async throws -> [TranscriptSegment] {
+        let outputBase = wavURL.deletingPathExtension()
+
+        // Run whisper with VTT output for timestamps
         let result = try await ProcessRunner.run(
             executablePath: whisperPath,
             arguments: [
                 "-m", modelPath,
                 "-f", wavURL.path,
-                "-otxt",
-                "-of", outputURL.deletingPathExtension().path, // whisper adds .txt
+                "-ovtt",  // VTT format has timestamps
+                "-of", outputBase.path,
                 "--print-progress"
             ],
-            timeout: 1800 // 30 minutes for long recordings
+            timeout: 1800
         )
 
         if !result.success {
             throw TranscriptionError.transcriptionFailed(result.stderr)
         }
 
-        // Rename .txt to .md and format
-        let txtURL = outputURL.deletingPathExtension().appendingPathExtension("txt")
-        if FileManager.default.fileExists(atPath: txtURL.path) {
-            let content = try String(contentsOf: txtURL, encoding: .utf8)
-            try formatTranscript(content: content, outputURL: outputURL)
-            try? FileManager.default.removeItem(at: txtURL)
+        // Parse VTT file
+        let vttURL = outputBase.appendingPathExtension("vtt")
+        defer { try? FileManager.default.removeItem(at: vttURL) }
+
+        guard FileManager.default.fileExists(atPath: vttURL.path) else {
+            return []
         }
 
-        // Clean up wav file
-        try? FileManager.default.removeItem(at: wavURL)
+        let vttContent = try String(contentsOf: vttURL, encoding: .utf8)
+        return parseVTT(content: vttContent, speaker: speaker)
     }
 
-    private func convertToWav(inputURL: URL, outputURL: URL) async throws {
-        // Use afconvert to convert to 16kHz 16-bit PCM WAV
-        let afconvertPath = "/usr/bin/afconvert"
+    /// Parse VTT format: "00:00:00.000 --> 00:00:02.500\nText"
+    private func parseVTT(content: String, speaker: String) -> [TranscriptSegment] {
+        var segments: [TranscriptSegment] = []
+        let lines = content.components(separatedBy: .newlines)
 
-        let result = try await ProcessRunner.run(
-            executablePath: afconvertPath,
-            arguments: [
-                "-f", "WAVE",
-                "-d", "LEI16@16000",
-                inputURL.path,
-                outputURL.path
-            ],
-            timeout: 300
-        )
+        var i = 0
+        while i < lines.count {
+            let line = lines[i].trimmingCharacters(in: .whitespaces)
 
-        if !result.success {
-            throw TranscriptionError.conversionFailed
+            // Look for timestamp line: "00:00:00.000 --> 00:00:02.500"
+            if line.contains("-->") {
+                let parts = line.components(separatedBy: "-->")
+                if parts.count == 2,
+                   let startMs = parseTimestamp(parts[0].trimmingCharacters(in: .whitespaces)),
+                   let endMs = parseTimestamp(parts[1].trimmingCharacters(in: .whitespaces)) {
+
+                    // Collect text lines until empty line or next timestamp
+                    var textLines: [String] = []
+                    i += 1
+                    while i < lines.count {
+                        let textLine = lines[i].trimmingCharacters(in: .whitespaces)
+                        if textLine.isEmpty || textLine.contains("-->") {
+                            break
+                        }
+                        textLines.append(textLine)
+                        i += 1
+                    }
+
+                    let text = textLines.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+                    if !text.isEmpty {
+                        segments.append(TranscriptSegment(
+                            startMs: startMs,
+                            endMs: endMs,
+                            speaker: speaker,
+                            text: text
+                        ))
+                    }
+                    continue
+                }
+            }
+            i += 1
         }
+
+        return segments
     }
 
-    private func formatTranscript(content: String, outputURL: URL) throws {
-        let formatted = """
-            # Transcript
+    /// Parse VTT timestamp "00:00:00.000" to milliseconds
+    private func parseTimestamp(_ timestamp: String) -> Int? {
+        // Format: HH:MM:SS.mmm or MM:SS.mmm
+        let parts = timestamp.components(separatedBy: ":")
+        guard parts.count >= 2 else { return nil }
 
-            \(content)
-            """
-        try formatted.write(to: outputURL, atomically: true, encoding: .utf8)
+        let hours: Int
+        let minutes: Int
+        let secondsPart: String
+
+        if parts.count == 3 {
+            hours = Int(parts[0]) ?? 0
+            minutes = Int(parts[1]) ?? 0
+            secondsPart = parts[2]
+        } else {
+            hours = 0
+            minutes = Int(parts[0]) ?? 0
+            secondsPart = parts[1]
+        }
+
+        let secondsParts = secondsPart.components(separatedBy: ".")
+        let seconds = Int(secondsParts[0]) ?? 0
+        let millis = secondsParts.count > 1 ? Int(secondsParts[1].prefix(3)) ?? 0 : 0
+
+        return (hours * 3600 + minutes * 60 + seconds) * 1000 + millis
+    }
+
+    /// Merge two transcript streams by timestamp
+    private func mergeTranscripts(mic: [TranscriptSegment], system: [TranscriptSegment]) -> [TranscriptSegment] {
+        var merged = mic + system
+        merged.sort()
+        return merged
+    }
+
+    /// Format merged transcript with speaker labels
+    private func formatDiarizedTranscript(segments: [TranscriptSegment], outputURL: URL) throws {
+        var lines: [String] = ["# Transcript", ""]
+
+        var currentSpeaker = ""
+        for segment in segments {
+            if segment.speaker != currentSpeaker {
+                if !currentSpeaker.isEmpty {
+                    lines.append("")  // Blank line between speakers
+                }
+                currentSpeaker = segment.speaker
+                lines.append("**\(segment.speaker):**")
+            }
+            lines.append(segment.text)
+        }
+
+        let content = lines.joined(separator: "\n")
+        try content.write(to: outputURL, atomically: true, encoding: .utf8)
     }
 
     private static func findModel() -> String? {

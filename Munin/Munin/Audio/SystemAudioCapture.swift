@@ -15,9 +15,6 @@ final class SystemAudioCapture: @unchecked Sendable {
     private let systemAudioHandler: (CMSampleBuffer) -> Void
     private let microphoneHandler: (CMSampleBuffer) -> Void
 
-    private let outputFormat: AVAudioFormat
-    private var systemFormatDescription: CMAudioFormatDescription?
-    private var micFormatDescription: CMAudioFormatDescription?
     private var systemSampleTime: Int64 = 0
     private var micSampleTime: Int64 = 0
 
@@ -31,49 +28,8 @@ final class SystemAudioCapture: @unchecked Sendable {
         self.systemAudioHandler = systemAudioHandler
         self.microphoneHandler = microphoneHandler
 
-        // Output format: 48kHz mono float32 (matches AudioMixer expectations)
-        guard let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1) else {
-            throw AudioCaptureError.failedToCreateFormat
-        }
-        self.outputFormat = format
-
-        // Create format descriptions for CMSampleBuffer creation
-        self.systemFormatDescription = try createFormatDescription()
-        self.micFormatDescription = try createFormatDescription()
-
         // Set up the audio tap for system audio capture
         try await setupAudioTap()
-    }
-
-    private func createFormatDescription() throws -> CMAudioFormatDescription {
-        var asbd = AudioStreamBasicDescription(
-            mSampleRate: 48000,
-            mFormatID: kAudioFormatLinearPCM,
-            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
-            mBytesPerPacket: 4,
-            mFramesPerPacket: 1,
-            mBytesPerFrame: 4,
-            mChannelsPerFrame: 1,
-            mBitsPerChannel: 32,
-            mReserved: 0
-        )
-
-        var formatDescription: CMAudioFormatDescription?
-        let status = CMAudioFormatDescriptionCreate(
-            allocator: kCFAllocatorDefault,
-            asbd: &asbd,
-            layoutSize: 0,
-            layout: nil,
-            magicCookieSize: 0,
-            magicCookie: nil,
-            extensions: nil,
-            formatDescriptionOut: &formatDescription
-        )
-
-        guard status == noErr, let desc = formatDescription else {
-            throw AudioCaptureError.failedToCreateFormat
-        }
-        return desc
     }
 
     // MARK: - Core Audio Helpers
@@ -105,8 +61,7 @@ final class SystemAudioCapture: @unchecked Sendable {
     }
 
     private func getDeviceUID(deviceID: AudioObjectID) throws -> String {
-        var uid: CFString?
-        var propertySize = UInt32(MemoryLayout<CFString?>.size)
+        var propertySize = UInt32(MemoryLayout<CFString>.size)
 
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyDeviceUID,
@@ -114,20 +69,23 @@ final class SystemAudioCapture: @unchecked Sendable {
             mElement: kAudioObjectPropertyElementMain
         )
 
-        let status = AudioObjectGetPropertyData(
-            deviceID,
-            &propertyAddress,
-            0,
-            nil,
-            &propertySize,
-            &uid
-        )
+        var uid: Unmanaged<CFString>?
+        let status = withUnsafeMutablePointer(to: &uid) { uidPtr in
+            AudioObjectGetPropertyData(
+                deviceID,
+                &propertyAddress,
+                0,
+                nil,
+                &propertySize,
+                uidPtr
+            )
+        }
 
-        guard status == noErr, let deviceUID = uid as String? else {
+        guard status == noErr, let cfUID = uid?.takeRetainedValue() else {
             throw AudioCaptureError.failedToGetDeviceUID
         }
 
-        return deviceUID
+        return cfUID as String
     }
 
     private func getTapStreamFormat(tapID: AudioObjectID) throws -> AudioStreamBasicDescription {
@@ -304,7 +262,12 @@ final class SystemAudioCapture: @unchecked Sendable {
         print("Munin: System audio capture started via IO proc")
     }
 
+    private var systemAudioCallbackCount = 0
+    private var lastSystemAudioLogTime: Date = .distantPast
+
     private func processSystemAudioData(data: UnsafeMutableRawPointer, frameCount: Int, format: AudioStreamBasicDescription) {
+        systemAudioCallbackCount += 1
+
         // Convert to float samples based on format
         var floatSamples: [Float]
 
@@ -341,39 +304,21 @@ final class SystemAudioCapture: @unchecked Sendable {
             }
         }
 
-        // Resample if needed (simple approach)
-        if format.mSampleRate != 48000 {
-            floatSamples = resample(samples: floatSamples, fromRate: format.mSampleRate, toRate: 48000)
+        // Debug: log peak level periodically
+        if Date().timeIntervalSince(lastSystemAudioLogTime) > 2.0 {
+            lastSystemAudioLogTime = Date()
+            let peak = floatSamples.map { abs($0) }.max() ?? 0
+            print("Munin: System audio - callbacks: \(systemAudioCallbackCount), frames: \(frameCount), peak: \(String(format: "%.4f", peak))")
         }
 
-        // Create CMSampleBuffer
+        // Create CMSampleBuffer with native format - AudioMixer handles resampling via AVAudioConverter
         guard let sampleBuffer = createSampleBuffer(
             samples: floatSamples,
-            formatDescription: systemFormatDescription!,
+            sampleRate: format.mSampleRate,
             sampleTime: &systemSampleTime
         ) else { return }
 
         systemAudioHandler(sampleBuffer)
-    }
-
-    private func resample(samples: [Float], fromRate: Double, toRate: Double) -> [Float] {
-        let ratio = toRate / fromRate
-        let outputCount = Int(Double(samples.count) * ratio)
-        var output = [Float](repeating: 0, count: outputCount)
-
-        for i in 0..<outputCount {
-            let srcIndex = Double(i) / ratio
-            let srcIndexInt = Int(srcIndex)
-            let frac = Float(srcIndex - Double(srcIndexInt))
-
-            if srcIndexInt + 1 < samples.count {
-                output[i] = samples[srcIndexInt] * (1 - frac) + samples[srcIndexInt + 1] * frac
-            } else if srcIndexInt < samples.count {
-                output[i] = samples[srcIndexInt]
-            }
-        }
-
-        return output
     }
 
     private func startMicrophoneCapture() throws {
@@ -384,67 +329,36 @@ final class SystemAudioCapture: @unchecked Sendable {
 
         let inputNode = engine.inputNode
 
-        // Use default input device (microphone)
-        let inputFormat = inputNode.inputFormat(forBus: 0)
-        print("Munin: Microphone input format: \(inputFormat)")
+        // Get hardware format info
+        let hardwareFormat = inputNode.inputFormat(forBus: 0)
+        print("Munin: Microphone hardware format: \(hardwareFormat)")
 
-        // Create converter if needed
-        let converter = AVAudioConverter(from: inputFormat, to: outputFormat)
-        converter?.sampleRateConverterQuality = .max
+        // Request float format at hardware sample rate (AudioMixer handles resampling)
+        guard let floatFormat = AVAudioFormat(
+            standardFormatWithSampleRate: hardwareFormat.sampleRate,
+            channels: hardwareFormat.channelCount
+        ) else {
+            throw AudioCaptureError.failedToCreateFormat
+        }
 
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
-            self?.processMicrophoneBuffer(buffer, converter: converter)
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: floatFormat) { [weak self] buffer, _ in
+            self?.processMicrophoneBuffer(buffer, converter: nil)
         }
 
         try engine.start()
-        print("Munin: Microphone capture started")
+        print("Munin: Microphone capture started (float format)")
     }
 
     private func processMicrophoneBuffer(_ buffer: AVAudioPCMBuffer, converter: AVAudioConverter?) {
-        guard let samples = convertToFloatSamples(buffer: buffer, converter: converter) else { return }
+        // Pass through at native sample rate - AudioMixer handles resampling via AVAudioConverter
+        guard let samples = extractFloats(from: buffer) else { return }
         guard let sampleBuffer = createSampleBuffer(
             samples: samples,
-            formatDescription: micFormatDescription!,
+            sampleRate: buffer.format.sampleRate,
             sampleTime: &micSampleTime
         ) else { return }
 
         microphoneHandler(sampleBuffer)
-    }
-
-    private func convertToFloatSamples(buffer: AVAudioPCMBuffer, converter: AVAudioConverter?) -> [Float]? {
-        let frameCount = Int(buffer.frameLength)
-        guard frameCount > 0 else { return nil }
-
-        if let converter = converter, converter.inputFormat != converter.outputFormat {
-            // Need conversion
-            let ratio = outputFormat.sampleRate / converter.inputFormat.sampleRate
-            let outputFrameCount = AVAudioFrameCount(Double(frameCount) * ratio)
-
-            guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: outputFrameCount) else {
-                return nil
-            }
-
-            var error: NSError?
-            var inputConsumed = false
-            let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
-                if inputConsumed {
-                    outStatus.pointee = .noDataNow
-                    return nil
-                }
-                inputConsumed = true
-                outStatus.pointee = .haveData
-                return buffer
-            }
-
-            converter.convert(to: outputBuffer, error: &error, withInputFrom: inputBlock)
-
-            if error != nil { return nil }
-
-            return extractFloats(from: outputBuffer)
-        } else {
-            // Already in correct format or close enough
-            return extractFloats(from: buffer)
-        }
     }
 
     private func extractFloats(from buffer: AVAudioPCMBuffer) -> [Float]? {
@@ -472,14 +386,41 @@ final class SystemAudioCapture: @unchecked Sendable {
 
     private func createSampleBuffer(
         samples: [Float],
-        formatDescription: CMAudioFormatDescription,
+        sampleRate: Double,
         sampleTime: inout Int64
     ) -> CMSampleBuffer? {
         let frameCount = samples.count
         let dataSize = frameCount * MemoryLayout<Float>.size
 
+        // Create format description for this sample rate
+        var asbd = AudioStreamBasicDescription(
+            mSampleRate: sampleRate,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 4,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 4,
+            mChannelsPerFrame: 1,
+            mBitsPerChannel: 32,
+            mReserved: 0
+        )
+
+        var formatDescription: CMAudioFormatDescription?
+        var status = CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &asbd,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &formatDescription
+        )
+
+        guard status == noErr, let formatDesc = formatDescription else { return nil }
+
         var blockBuffer: CMBlockBuffer?
-        var status = CMBlockBufferCreateWithMemoryBlock(
+        status = CMBlockBufferCreateWithMemoryBlock(
             allocator: kCFAllocatorDefault,
             memoryBlock: nil,
             blockLength: dataSize,
@@ -505,12 +446,12 @@ final class SystemAudioCapture: @unchecked Sendable {
         guard status == kCMBlockBufferNoErr else { return nil }
 
         var sampleBuffer: CMSampleBuffer?
-        let presentationTime = CMTime(value: sampleTime, timescale: 48000)
+        let presentationTime = CMTime(value: sampleTime, timescale: CMTimeScale(sampleRate))
 
         status = CMAudioSampleBufferCreateReadyWithPacketDescriptions(
             allocator: kCFAllocatorDefault,
             dataBuffer: block,
-            formatDescription: formatDescription,
+            formatDescription: formatDesc,
             sampleCount: CMItemCount(frameCount),
             presentationTimeStamp: presentationTime,
             packetDescriptions: nil,

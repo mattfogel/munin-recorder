@@ -17,12 +17,12 @@ final class AudioFileWriter: @unchecked Sendable {
 
         assetWriter = try AVAssetWriter(outputURL: outputURL, fileType: .m4a)
 
-        // AAC audio settings
+        // AAC audio settings - stereo for diarization (L=mic, R=system)
         let audioSettings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: 48000,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderBitRateKey: 128000
+            AVNumberOfChannelsKey: 2,
+            AVEncoderBitRateKey: 192000  // Higher bitrate for stereo
         ]
 
         audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
