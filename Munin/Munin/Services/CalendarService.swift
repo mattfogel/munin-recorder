@@ -41,6 +41,7 @@ final class CalendarService {
         )
 
         let events = eventStore.events(matching: predicate)
+            .filter { !$0.isAllDay }
 
         // Find event that contains the current time (with buffer consideration)
         // Prefer events currently in progress over upcoming ones
