@@ -43,3 +43,6 @@ fastlane/test_output
 *.hmap
 *.moved-aside
 *.orig
+
+# Working files
+working-files/
