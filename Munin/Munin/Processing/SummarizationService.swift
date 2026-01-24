@@ -67,7 +67,7 @@ final class SummarizationService {
         do {
             result = try await ProcessRunner.run(
                 executablePath: claudePath,
-                arguments: ["-p"],
+                arguments: ["-p", "--model", "sonnet"],
                 stdinData: promptData,
                 timeout: 300 // 5 minutes for long transcripts
             )
@@ -82,7 +82,7 @@ final class SummarizationService {
             do {
                 finalResult = try await ProcessRunner.run(
                     executablePath: claudePath,
-                    arguments: ["-p", prompt],
+                    arguments: ["-p", "--model", "sonnet", prompt],
                     timeout: 300
                 )
             } catch ProcessRunner.ProcessError.timeout {
