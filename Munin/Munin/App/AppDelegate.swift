@@ -30,6 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = await checker.requestMicrophonePermission()
         }
 
+        // Request calendar permission on launch (optional, for auto-naming)
+        if !checker.hasCalendarPermission() {
+            _ = await checker.requestCalendarPermission()
+        }
+
         // Request notification permission for completion alerts
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()

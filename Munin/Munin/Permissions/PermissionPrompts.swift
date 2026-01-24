@@ -52,4 +52,30 @@ enum PermissionPrompts {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy")!
         NSWorkspace.shared.open(url)
     }
+
+    static func showCalendarAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Calendar Permission"
+        alert.informativeText = """
+            Munin can use your calendar to automatically name recordings after your meetings.
+
+            This is optional - without calendar access, recordings will use "unknown-meeting" as the name.
+
+            Please grant permission in System Settings:
+            Privacy & Security → Calendars → Enable Munin
+            """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Continue Without Calendar")
+
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            openCalendarSettings()
+        }
+    }
+
+    static func openCalendarSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!
+        NSWorkspace.shared.open(url)
+    }
 }

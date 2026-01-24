@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import EventKit
 
 @MainActor
 final class AppState: ObservableObject {
@@ -22,6 +23,8 @@ final class AppState: ObservableObject {
 
     private var audioCaptureCoordinator: AudioCaptureCoordinator?
     private var currentMeetingRecord: MeetingRecord?
+    private var currentParticipants: [String] = []
+    private let calendarService = CalendarService.shared
 
     var recordingDuration: TimeInterval {
         guard let startTime = recordingStartTime else { return 0 }
@@ -30,11 +33,27 @@ final class AppState: ObservableObject {
 
     @Published var lastError: String?
 
-    func startRecording(meetingName: String? = nil) async throws {
+    func startRecording(meetingName: String? = nil, event: EKEvent? = nil) async throws {
         guard state == .idle else { return }
 
         lastError = nil
-        currentMeetingName = meetingName ?? "unknown-meeting"
+        currentParticipants = []
+
+        // Determine meeting name and participants: explicit event > explicit name > auto-detect > fallback
+        if let event = event {
+            // Explicit event passed (from clicking upcoming meeting)
+            currentMeetingName = calendarService.sanitizeForFilename(event.title ?? "unknown-meeting")
+            currentParticipants = calendarService.getParticipantNames(event: event)
+            print("Munin: Using selected event: \(event.title ?? "untitled") with \(currentParticipants.count) participants")
+        } else if let name = meetingName {
+            currentMeetingName = name
+        } else if let detectedEvent = calendarService.getCurrentEvent() {
+            currentMeetingName = calendarService.sanitizeForFilename(detectedEvent.title ?? "unknown-meeting")
+            currentParticipants = calendarService.getParticipantNames(event: detectedEvent)
+            print("Munin: Found calendar event: \(detectedEvent.title ?? "untitled") with \(currentParticipants.count) participants")
+        } else {
+            currentMeetingName = "unknown-meeting"
+        }
 
         print("Munin: Starting recording...")
 
@@ -73,6 +92,7 @@ final class AppState: ObservableObject {
 
         recordingStartTime = nil
         currentMeetingRecord = nil
+        currentParticipants = []
         state = .idle
     }
 
@@ -83,7 +103,11 @@ final class AppState: ObservableObject {
         let transcriptURL = record.transcriptURL
 
         do {
-            try await transcriptionService.transcribe(audioURL: record.audioURL, outputURL: transcriptURL)
+            try await transcriptionService.transcribe(
+                audioURL: record.audioURL,
+                outputURL: transcriptURL,
+                participants: currentParticipants
+            )
         } catch {
             print("Transcription error: \(error)")
             lastError = error.localizedDescription

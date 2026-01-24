@@ -82,6 +82,7 @@ claude  # authenticate once
 On first run, grant:
 - Screen Recording (System Settings → Privacy & Security)
 - Microphone access
+- Calendar access (optional, for auto-naming recordings)
 
 ## Usage
 
@@ -131,20 +132,20 @@ Munin/
 
 ### Short-term
 - [x] Add app icon
-- [ ] Improve mic audio quality (timestamp-based sync)
+- [x] Improve mic audio quality (stereo separation + speaker diarization)
 - [x] Test full pipeline end-to-end
 - [x] Have the claude cli use sonnet as the default model (use command line argument)
 
 ### Phase 4: Calendar Integration
 **Goal:** Auto-name folders from calendar events
 
-- [ ] Request Calendar permission
-- [ ] Query EventKit for current/recent events
-- [ ] Match recording time to calendar event
-- [ ] Use event title for folder naming
-- [ ] Include meeting participant names at top of transcript file
-- [ ] Fallback logic (manual input → timestamp)
-- [ ] Show upcoming meetings in menu
+- [x] Request Calendar permission
+- [x] Query EventKit for current/recent events
+- [x] Match recording time to calendar event
+- [x] Use event title for folder naming
+- [x] Include meeting participant names at top of transcript file
+- [x] Fallback logic (manual input → timestamp)
+- [x] Show upcoming meetings in menu
 
 ### Phase 5: App Detection
 **Goal:** Prompt to record when meeting app launches

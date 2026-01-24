@@ -58,7 +58,7 @@ final class TranscriptionService {
         self.modelPath = Self.findModel()
     }
 
-    func transcribe(audioURL: URL, outputURL: URL) async throws {
+    func transcribe(audioURL: URL, outputURL: URL, participants: [String] = []) async throws {
         guard let whisperPath = whisperPath else {
             throw TranscriptionError.whisperNotFound
         }
@@ -82,7 +82,7 @@ final class TranscriptionService {
 
         // Merge and format transcript
         let merged = mergeTranscripts(mic: micSegments, system: systemSegments)
-        try formatDiarizedTranscript(segments: merged, outputURL: outputURL)
+        try formatDiarizedTranscript(segments: merged, outputURL: outputURL, participants: participants)
 
         // Clean up temp files
         try? FileManager.default.removeItem(at: micWavURL)
@@ -269,8 +269,14 @@ final class TranscriptionService {
     }
 
     /// Format merged transcript with speaker labels
-    private func formatDiarizedTranscript(segments: [TranscriptSegment], outputURL: URL) throws {
+    private func formatDiarizedTranscript(segments: [TranscriptSegment], outputURL: URL, participants: [String] = []) throws {
         var lines: [String] = ["# Transcript", ""]
+
+        // Add participants header if available
+        if !participants.isEmpty {
+            lines.append("**Participants:** \(participants.joined(separator: ", "))")
+            lines.append("")
+        }
 
         var currentSpeaker = ""
         for segment in segments {

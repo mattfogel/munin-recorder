@@ -28,5 +28,7 @@
     <string>Munin needs microphone access to record your voice during meetings.</string>
     <key>NSAudioCaptureUsageDescription</key>
     <string>Munin needs system audio access to record meeting participants from your computer.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Munin uses your calendar to automatically name recordings after your meetings and show participants.</string>
 </dict>
 </plist>

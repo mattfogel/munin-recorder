@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import EventKit
 
 final class PermissionChecker {
 
@@ -13,16 +14,35 @@ final class PermissionChecker {
         await AVCaptureDevice.requestAccess(for: .audio)
     }
 
+    /// Checks if calendar permission is granted
+    func hasCalendarPermission() -> Bool {
+        let status = EKEventStore.authorizationStatus(for: .event)
+        return status == .fullAccess
+    }
+
+    /// Requests calendar permission
+    func requestCalendarPermission() async -> Bool {
+        let store = EKEventStore()
+        do {
+            return try await store.requestFullAccessToEvents()
+        } catch {
+            print("Munin: Calendar permission request failed: \(error)")
+            return false
+        }
+    }
+
     /// Checks all required permissions
     func checkAllPermissions() async -> PermissionStatus {
         let microphone = hasMicrophonePermission()
+        let calendar = hasCalendarPermission()
 
-        return PermissionStatus(microphone: microphone)
+        return PermissionStatus(microphone: microphone, calendar: calendar)
     }
 }
 
 struct PermissionStatus {
     let microphone: Bool
+    let calendar: Bool
 
     var canRecord: Bool {
         // Microphone permission is required for recording
@@ -31,6 +51,6 @@ struct PermissionStatus {
     }
 
     var allGranted: Bool {
-        microphone
+        microphone && calendar
     }
 }

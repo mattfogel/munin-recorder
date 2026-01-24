@@ -1,4 +1,5 @@
 import SwiftUI
+import EventKit
 
 @main
 struct MuninApp: App {
@@ -23,6 +24,10 @@ struct ContentView: View {
     @State private var timer: Timer?
     @State private var displayedDuration: TimeInterval = 0
 
+    private var upcomingEvents: [EKEvent] {
+        CalendarService.shared.getUpcomingEvents(limit: 3)
+    }
+
     var body: some View {
         VStack(spacing: 20) {
             Text("Munin")
@@ -30,6 +35,10 @@ struct ContentView: View {
                 .fontWeight(.bold)
 
             statusView
+
+            if appState.state == .idle && !upcomingEvents.isEmpty {
+                upcomingEventsView
+            }
 
             if let error = appState.lastError {
                 Text(error)
@@ -132,6 +141,43 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private var upcomingEventsView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Upcoming Meetings")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            ForEach(upcomingEvents, id: \.eventIdentifier) { event in
+                Button(action: {
+                    Task {
+                        try? await appState.startRecording(event: event)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "calendar")
+                            .foregroundColor(.secondary)
+                        Text(formatEventTitle(event))
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func formatEventTitle(_ event: EKEvent) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        let timeStr = formatter.string(from: event.startDate)
+        let title = event.title ?? "Untitled"
+        let displayTitle = "\(timeStr) - \(title)"
+        return String(displayTitle.prefix(40))
+    }
+
     private func formatDuration(_ duration: TimeInterval) -> String {
         let minutes = Int(duration) / 60
         let seconds = Int(duration) % 60
@@ -142,12 +188,31 @@ struct ContentView: View {
 struct MenuBarView: View {
     @ObservedObject var appState: AppState
 
+    private var upcomingEvents: [EKEvent] {
+        CalendarService.shared.getUpcomingEvents(limit: 2)
+    }
+
     var body: some View {
         switch appState.state {
         case .idle:
             Text("Ready to record")
                 .foregroundColor(.secondary)
             Divider()
+
+            // Upcoming meetings section
+            if !upcomingEvents.isEmpty {
+                Text("Upcoming Meetings")
+                    .foregroundColor(.secondary)
+                ForEach(upcomingEvents, id: \.eventIdentifier) { event in
+                    Button(formatEventTitle(event)) {
+                        Task {
+                            try? await appState.startRecording(event: event)
+                        }
+                    }
+                }
+                Divider()
+            }
+
             Button("Start Recording") {
                 Task {
                     try? await appState.startRecording()
@@ -185,6 +250,15 @@ struct MenuBarView: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    private func formatEventTitle(_ event: EKEvent) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        let timeStr = formatter.string(from: event.startDate)
+        let title = event.title ?? "Untitled"
+        let displayTitle = "\(timeStr) - \(title)"
+        return String(displayTitle.prefix(40))
     }
 
     private func processingLabel(for phase: AppState.RecordingState.ProcessingPhase) -> String {

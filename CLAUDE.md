@@ -15,7 +15,7 @@ open Munin/Munin.xcodeproj
 - whisper.cpp with model at `~/.munin/models/ggml-base.en.bin`
 - Claude CLI authenticated (`npm install -g @anthropic-ai/claude-code && claude`)
 
-**Permissions needed:** Screen Recording, Microphone (granted on first run)
+**Permissions needed:** Screen Recording, Microphone, Calendar (granted on first run)
 
 ## Architecture
 
@@ -64,3 +64,15 @@ Output: ~/Meetings/DATE/TIME-name/
 | `/Processing/ProcessRunner.swift` | Async subprocess utility with timeout |
 | `/Processing/TranscriptionService.swift` | whisper.cpp wrapper |
 | `/Processing/SummarizationService.swift` | Claude CLI wrapper (non-fatal on failure) |
+| `/Services/CalendarService.swift` | EventKit integration for meeting detection |
+
+## Code Style
+
+**Prefer modern macOS paradigms:**
+- SwiftUI over AppKit for all UI (menus, windows, views)
+- Use `MenuBarExtra` for menubar, not `NSStatusItem`
+- async/await over callbacks/delegates
+- Combine for reactive state (`@Published`, `@ObservedObject`)
+- Only use AppKit when SwiftUI lacks capability (e.g., Core Audio, low-level system APIs)
+
+**Note:** `Menubar/MenuBuilder.swift` and `Menubar/StatusBarController.swift` are AppKit implementations that were used in the initial version. The app was refactored to use SwiftUI's `MenuBarExtra` in `MuninApp.swift`. These files are compiled but not instantiated — they could be removed or kept as reference.
