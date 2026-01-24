@@ -130,9 +130,11 @@ Munin/
 ## Roadmap
 
 ### Short-term
-- [ ] Add app icon
+- [x] Add app icon
 - [ ] Improve mic audio quality (timestamp-based sync)
 - [ ] Test full pipeline end-to-end
+- [ ] Have the claude cli use sonnet as the default model (use command line argument)
+- [ ] Let user de
 
 ### Phase 4: Calendar Integration
 **Goal:** Auto-name folders from calendar events
@@ -141,6 +143,7 @@ Munin/
 - [ ] Query EventKit for current/recent events
 - [ ] Match recording time to calendar event
 - [ ] Use event title for folder naming
+- [ ] Include meeting participant names at top of transcript file
 - [ ] Fallback logic (manual input → timestamp)
 - [ ] Show upcoming meetings in menu
 
@@ -163,11 +166,13 @@ Munin/
 - [ ] Preference to enable/disable
 
 ### Future Enhancements
-- Speaker diarization (who said what)
+- Preferences window (storage location, whisper model, etc.)
+- Speaker diarization (who said what) - step one, "Me" (for mic input) and "Them" for system audio
 - Search across all transcripts
 - Global hotkey (Cmd+Shift+R)
 - Real-time transcription display
-- Preferences window (storage location, whisper model, etc.)
+
+
 
 ## Troubleshooting
 
