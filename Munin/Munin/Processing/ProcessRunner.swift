@@ -32,6 +32,7 @@ final class ProcessRunner {
         arguments: [String],
         workingDirectory: URL? = nil,
         environment: [String: String]? = nil,
+        stdinData: Data? = nil,
         timeout: TimeInterval = 300 // 5 minutes default
     ) async throws -> Result {
         guard FileManager.default.fileExists(atPath: executablePath) else {
@@ -55,42 +56,65 @@ final class ProcessRunner {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        return try await withCheckedThrowingContinuation { continuation in
-            var didComplete = false
-            let timeoutWorkItem = DispatchWorkItem { [weak process] in
-                guard !didComplete else { return }
-                process?.terminate()
-                continuation.resume(throwing: ProcessError.timeout)
+        let stdinPipe = Pipe()
+        if stdinData != nil {
+            process.standardInput = stdinPipe
+        }
+
+        do {
+            try process.run()
+        } catch {
+            throw ProcessError.executionFailed(error.localizedDescription)
+        }
+
+        if let stdinData {
+            let stdinHandle = stdinPipe.fileHandleForWriting
+            DispatchQueue.global().async {
+                stdinHandle.write(stdinData)
+                stdinHandle.closeFile()
             }
+        }
 
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timeoutWorkItem)
+        let timeoutNanoseconds = UInt64(max(0, timeout) * 1_000_000_000)
 
-            do {
-                try process.run()
+        do {
+            return try await withThrowingTaskGroup(of: Result.self) { group in
+                group.addTask {
+                    async let stdoutData = stdoutPipe.fileHandleForReading.readToEnd()
+                    async let stderrData = stderrPipe.fileHandleForReading.readToEnd()
 
-                DispatchQueue.global().async {
-                    process.waitUntilExit()
+                    let exitCode: Int32 = await withCheckedContinuation { continuation in
+                        DispatchQueue.global().async {
+                            process.waitUntilExit()
+                            continuation.resume(returning: process.terminationStatus)
+                        }
+                    }
 
-                    timeoutWorkItem.cancel()
-                    guard !didComplete else { return }
-                    didComplete = true
+                    let stdout = (try? await stdoutData) ?? Data()
+                    let stderr = (try? await stderrData) ?? Data()
 
-                    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-
-                    let result = Result(
-                        exitCode: process.terminationStatus,
-                        stdout: String(data: stdoutData, encoding: .utf8) ?? "",
-                        stderr: String(data: stderrData, encoding: .utf8) ?? ""
+                    return Result(
+                        exitCode: exitCode,
+                        stdout: String(data: stdout, encoding: .utf8) ?? "",
+                        stderr: String(data: stderr, encoding: .utf8) ?? ""
                     )
-
-                    continuation.resume(returning: result)
                 }
-            } catch {
-                timeoutWorkItem.cancel()
-                didComplete = true
-                continuation.resume(throwing: ProcessError.executionFailed(error.localizedDescription))
+
+                group.addTask {
+                    try await Task.sleep(nanoseconds: timeoutNanoseconds)
+                    process.terminate()
+                    throw ProcessError.timeout
+                }
+
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
             }
+        } catch {
+            if process.isRunning {
+                process.terminate()
+            }
+            throw error
         }
     }
 

@@ -60,29 +60,54 @@ final class SummarizationService {
             \(transcript)
             """
 
-        // Run claude CLI with the prompt (-p for print mode, outputs just the response)
-        let result = try await ProcessRunner.run(
-            executablePath: claudePath,
-            arguments: ["-p", prompt],
-            timeout: 300 // 5 minutes for long transcripts
-        )
+        let promptData = Data(prompt.utf8)
+
+        // Run claude CLI with the prompt via stdin to avoid command-line length limits.
+        let result: ProcessRunner.Result
+        do {
+            result = try await ProcessRunner.run(
+                executablePath: claudePath,
+                arguments: ["-p"],
+                stdinData: promptData,
+                timeout: 300 // 5 minutes for long transcripts
+            )
+        } catch ProcessRunner.ProcessError.timeout {
+            throw SummarizationError.timeout
+        }
+
+        let finalResult: ProcessRunner.Result
+        if !result.success,
+           shouldRetryWithArgument(result.stderr),
+           promptData.count <= 100_000 {
+            do {
+                finalResult = try await ProcessRunner.run(
+                    executablePath: claudePath,
+                    arguments: ["-p", prompt],
+                    timeout: 300
+                )
+            } catch ProcessRunner.ProcessError.timeout {
+                throw SummarizationError.timeout
+            }
+        } else {
+            finalResult = result
+        }
 
         // Check for authentication issues
-        if result.stderr.contains("not authenticated") || result.stderr.contains("auth") {
+        if finalResult.stderr.contains("not authenticated") || finalResult.stderr.contains("auth") {
             throw SummarizationError.claudeNotAuthenticated
         }
 
-        if !result.success {
+        if !finalResult.success {
             // Don't fail hard - summarization is optional
-            print("Summarization failed: \(result.stderr)")
-            throw SummarizationError.summarizationFailed(result.stderr)
+            print("Summarization failed: \(finalResult.stderr)")
+            throw SummarizationError.summarizationFailed(finalResult.stderr)
         }
 
         // Write the summary
         let summary = """
             # Meeting Summary
 
-            \(result.stdout)
+            \(finalResult.stdout)
             """
         try summary.write(to: outputURL, atomically: true, encoding: .utf8)
     }
@@ -103,5 +128,10 @@ final class SummarizationService {
         } catch {
             return false
         }
+    }
+
+    private func shouldRetryWithArgument(_ stderr: String) -> Bool {
+        let lowered = stderr.lowercased()
+        return lowered.contains("usage") || lowered.contains("prompt") || lowered.contains("missing")
     }
 }
