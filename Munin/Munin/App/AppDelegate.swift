@@ -2,18 +2,27 @@ import AppKit
 import UserNotifications
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     let appState = AppState()
+    private(set) lazy var meetingDetectionService = MeetingDetectionService(appState: appState)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("Munin: applicationDidFinishLaunching")
 
+        // Setup notification handling
+        UNUserNotificationCenter.current().delegate = self
+        MeetingDetectionService.registerNotificationCategory()
+
         Task {
             await checkPermissionsOnLaunch()
+            // Start monitoring after permissions are requested
+            meetingDetectionService.startMonitoring()
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        meetingDetectionService.stopMonitoring()
+
         if appState.state == .recording {
             Task {
                 await appState.stopRecording()
@@ -41,5 +50,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settings.authorizationStatus == .notDetermined {
             _ = try? await center.requestAuthorization(options: [.alert, .sound])
         }
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let categoryIdentifier = response.notification.request.content.categoryIdentifier
+        let actionIdentifier = response.actionIdentifier
+
+        if categoryIdentifier == MeetingDetectionService.notificationCategory {
+            Task { @MainActor in
+                meetingDetectionService.handleNotificationAction(actionIdentifier)
+            }
+        }
+
+        completionHandler()
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Show notifications even when app is in foreground
+        completionHandler([.banner, .sound])
     }
 }

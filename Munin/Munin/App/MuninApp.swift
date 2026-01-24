@@ -13,7 +13,7 @@ struct MuninApp: App {
         .defaultSize(width: 300, height: 200)
 
         MenuBarExtra("Munin", systemImage: "waveform.circle") {
-            MenuBarView(appState: appDelegate.appState)
+            MenuBarView(appState: appDelegate.appState, meetingDetection: appDelegate.meetingDetectionService)
         }
         .menuBarExtraStyle(.menu)
     }
@@ -187,6 +187,7 @@ struct ContentView: View {
 
 struct MenuBarView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject var meetingDetection: MeetingDetectionService
 
     private var upcomingEvents: [EKEvent] {
         CalendarService.shared.getUpcomingEvents(limit: 2)
@@ -235,6 +236,10 @@ struct MenuBarView: View {
             Text(processingLabel(for: phase))
                 .foregroundColor(.secondary)
         }
+
+        Divider()
+
+        Toggle("Auto-detect Meetings", isOn: $meetingDetection.isEnabled)
 
         Divider()
 

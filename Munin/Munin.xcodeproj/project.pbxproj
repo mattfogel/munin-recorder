@@ -26,6 +26,8 @@
 		A10000010000000000000020 /* MuninApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000020 /* MuninApp.swift */; };
 		A10000010000000000000021 /* AudioMixer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000021 /* AudioMixer.swift */; };
 		A10000010000000000000022 /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000022 /* CalendarService.swift */; };
+		A10000010000000000000023 /* MicActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000023 /* MicActivityMonitor.swift */; };
+		A10000010000000000000024 /* MeetingDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000024 /* MeetingDetectionService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +53,8 @@
 		A20000010000000000000020 /* MuninApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuninApp.swift; sourceTree = "<group>"; };
 		A20000010000000000000021 /* AudioMixer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMixer.swift; sourceTree = "<group>"; };
 		A20000010000000000000022 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
+		A20000010000000000000023 /* MicActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicActivityMonitor.swift; sourceTree = "<group>"; };
+		A20000010000000000000024 /* MeetingDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingDetectionService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,6 +172,8 @@
 			isa = PBXGroup;
 			children = (
 				A20000010000000000000022 /* CalendarService.swift */,
+				A20000010000000000000023 /* MicActivityMonitor.swift */,
+				A20000010000000000000024 /* MeetingDetectionService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -259,6 +265,8 @@
 				A1000001000000000000000F /* PermissionChecker.swift in Sources */,
 				A10000010000000000000010 /* PermissionPrompts.swift in Sources */,
 				A10000010000000000000022 /* CalendarService.swift in Sources */,
+				A10000010000000000000023 /* MicActivityMonitor.swift in Sources */,
+				A10000010000000000000024 /* MeetingDetectionService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
