@@ -132,9 +132,8 @@ Munin/
 ### Short-term
 - [x] Add app icon
 - [ ] Improve mic audio quality (timestamp-based sync)
-- [ ] Test full pipeline end-to-end
-- [ ] Have the claude cli use sonnet as the default model (use command line argument)
-- [ ] Let user de
+- [x] Test full pipeline end-to-end
+- [x] Have the claude cli use sonnet as the default model (use command line argument)
 
 ### Phase 4: Calendar Integration
 **Goal:** Auto-name folders from calendar events
