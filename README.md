@@ -130,29 +130,14 @@ Munin/
 
 ## Roadmap
 
-### Short-term
-- [x] Add app icon
-- [x] Improve mic audio quality (stereo separation + speaker diarization)
-- [x] Test full pipeline end-to-end
-- [x] Have the claude cli use sonnet as the default model (use command line argument)
-
-### Phase 4: Calendar Integration
-**Goal:** Auto-name folders from calendar events
-
-- [x] Request Calendar permission
-- [x] Query EventKit for current/recent events
-- [x] Match recording time to calendar event
-- [x] Use event title for folder naming
-- [x] Include meeting participant names at top of transcript file
-- [x] Fallback logic (manual input → timestamp)
-- [x] Show upcoming meetings in menu
 
 ### Phase 5: App Detection
 **Goal:** Prompt to record when meeting starts in a meeting app
 
-- [ ] Detect meeting has started (e.g. in Zoom, Teams, browser for Meet or browser-based Teams meeting) - investigate if/how we could detect that a meeting has started in one of these apps?
-- [ ] Show notification/prompt asking to start recording
-- [ ] Quick-start from notification
+- [x] Detect meeting has started (e.g. in Zoom, Teams, browser for Meet or browser-based Teams meeting) - investigate if/how we could detect that a meeting has started in one of these apps?
+- [x] Show notification/prompt asking to start recording
+- [x] Quick-start from notification
+- [ ] Custom notification pop-up for better UX
 - [ ] Preference to enable/disable per app
 
 ### Phase 6: Calendar Auto-Start
