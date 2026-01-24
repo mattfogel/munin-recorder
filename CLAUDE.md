@@ -15,7 +15,7 @@ open Munin/Munin.xcodeproj
 - whisper.cpp with model at `~/.munin/models/ggml-base.en.bin`
 - Claude CLI authenticated (`npm install -g @anthropic-ai/claude-code && claude`)
 
-**Permissions needed:** Screen Recording, Microphone, Calendar (granted on first run)
+**Permissions needed:** Screen Recording, Microphone, Calendar, Notifications (granted on first run)
 
 ## Architecture
 
@@ -26,7 +26,7 @@ AppState (state machine: idle → recording → processing)
     ↓
 AudioCaptureCoordinator
   ├─ SystemAudioCapture (Core Audio Taps + AVAudioEngine)
-  ├─ AudioMixer (real-time mixing via Accelerate/vDSP)
+  ├─ AudioMixer (real-time stereo mixing via Accelerate/vDSP)
   └─ AudioFileWriter (AVAssetWriter → AAC m4a)
     ↓
 TranscriptionService (m4a → wav → whisper.cpp → transcript.md)
@@ -39,9 +39,9 @@ Output: ~/Meetings/DATE/TIME-name/
 ## Key Technical Details
 
 **Audio pipeline:**
-- All internal: 48kHz mono float32 PCM
+- All internal: 48kHz mono float32 PCM per source
 - Whisper input: 16kHz 16-bit PCM WAV (converted via afconvert)
-- File output: AAC m4a, 48kHz mono, 128kbps
+- File output: AAC m4a, 48kHz stereo, 128kbps
 
 **Threading:**
 - `@MainActor` on AppState, AppDelegate for UI/state
@@ -52,7 +52,9 @@ Output: ~/Meetings/DATE/TIME-name/
 - 8192-sample buffers (~170ms) for timestamp jitter
 - 200ms startup buffering before mixing begins
 - 64-sample crossfade at buffer boundaries
-- System audio gain 0.65, mic gain 1.0
+- Stereo output: Left channel = mic, Right channel = system (enables speaker diarization)
+- Soft limiter per channel (-6dB threshold, 8:1 ratio) prevents clipping
+- Unity gain on both sources; limiter handles levels
 
 ## Module Responsibilities
 

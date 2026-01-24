@@ -7,7 +7,6 @@ A privacy-focused macOS meeting recorder. Records system audio + microphone, tra
 **Working:** Window UI, audio capture (system + mic), file output, transcription pipeline, summarization pipeline, menubar icon (with proper signing).
 
 **Known Issues:**
-- Mic audio has slight robotic artifacts when mixed with system audio (timestamp alignment issue)
 - No app icon yet
 
 ## Architecture
@@ -83,6 +82,7 @@ On first run, grant:
 - Screen Recording (System Settings → Privacy & Security)
 - Microphone access
 - Calendar access (optional, for auto-naming recordings)
+- Notifications (for completion alerts)
 
 ## Usage
 
@@ -99,7 +99,7 @@ On first run, grant:
 ~/Meetings/
 └── 2025-01-23/
     └── 1430-unknown-meeting/
-        ├── audio.m4a      # AAC, 48kHz, mono
+        ├── audio.m4a      # AAC, 48kHz, stereo (L=mic, R=system)
         ├── transcript.md  # Timestamped transcript
         └── summary.md     # Key points, action items
 ```
@@ -148,10 +148,9 @@ Munin/
 - [x] Show upcoming meetings in menu
 
 ### Phase 5: App Detection
-**Goal:** Prompt to record when meeting app launches
+**Goal:** Prompt to record when meeting starts in a meeting app
 
-- [ ] Monitor NSWorkspace for app launches
-- [ ] Detect meeting apps (Zoom, Teams, browser for Meet)
+- [ ] Detect meeting has started (e.g. in Zoom, Teams, browser for Meet or browser-based Teams meeting) - investigate if/how we could detect that a meeting has started in one of these apps?
 - [ ] Show notification/prompt asking to start recording
 - [ ] Quick-start from notification
 - [ ] Preference to enable/disable per app
@@ -161,7 +160,7 @@ Munin/
 
 - [ ] Background timer checking upcoming events
 - [ ] Configurable lead time (e.g., 2 minutes before)
-- [ ] Auto-start recording with event name
+- [ ] Notification offering to Start recording with event name
 - [ ] Notification that recording started
 - [ ] Preference to enable/disable
 
@@ -189,13 +188,13 @@ Munin: System audio samples received: 101
 Munin: Microphone samples received: 101
 ```
 
-### Audio has robotic artifacts
-Known issue with async timestamp alignment. Current mitigations: 8192-sample buffer, high-quality resampling, crossfade at boundaries.
+### Audio quality issues
+Stereo output (mic on left, system on right) with per-channel soft limiting. If issues persist, check console for sample counts matching between sources.
 
 ## Technical Notes
 
 ### Audio Capture
-Uses Core Audio Taps (replaced ScreenCaptureKit approach) for system audio capture. Microphone captured via AVAudioEngine. Both mixed in real-time.
+Uses Core Audio Taps for system audio capture. Microphone captured via AVAudioEngine. Output is stereo (mic=left, system=right) for speaker diarization, with soft limiting to prevent clipping.
 
 ### Transcription
 Converts m4a → wav via `afconvert`, then runs whisper.cpp with `--output-txt --output-vtt`.
