@@ -12,7 +12,7 @@ struct MuninApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 300, height: 200)
 
-        MenuBarExtra("Munin", systemImage: "waveform.circle") {
+        MenuBarExtra("Munin", image: "MenuBarIcon") {
             MenuBarView(appState: appDelegate.appState, meetingDetection: appDelegate.meetingDetectionService)
         }
         .menuBarExtraStyle(.menu)

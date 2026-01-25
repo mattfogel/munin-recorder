@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Combine
 
 /// Detects meeting starts via mic activity and prompts user to record
 @MainActor
@@ -10,11 +11,7 @@ final class MeetingDetectionService: ObservableObject {
     @Published var isEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isEnabled, forKey: Self.isEnabledKey)
-            if isEnabled {
-                startMonitoring()
-            } else {
-                stopMonitoring()
-            }
+            updateMonitoringState()
         }
     }
 
@@ -22,12 +19,14 @@ final class MeetingDetectionService: ObservableObject {
     private var cooldownUntil: Date?
     private weak var appState: AppState?
     private var promptPanel: MeetingPromptPanel?
+    private var stateObserver: AnyCancellable?
 
     init(appState: AppState) {
         self.appState = appState
         // Restore saved preference (default: enabled)
         self.isEnabled = UserDefaults.standard.object(forKey: Self.isEnabledKey) as? Bool ?? true
         setupMicMonitor()
+        observeAppState()
     }
 
     private func setupMicMonitor() {
@@ -38,8 +37,24 @@ final class MeetingDetectionService: ObservableObject {
         }
     }
 
+    private func observeAppState() {
+        // Pause monitoring while recording to avoid detecting our own mic usage
+        stateObserver = appState?.$state.sink { [weak self] state in
+            self?.updateMonitoringState()
+        }
+    }
+
+    private func updateMonitoringState() {
+        let shouldMonitor = isEnabled && appState?.state == .idle
+        if shouldMonitor {
+            micMonitor.startMonitoring()
+        } else {
+            micMonitor.stopMonitoring()
+        }
+    }
+
     func startMonitoring() {
-        micMonitor.startMonitoring()
+        updateMonitoringState()
         print("Munin: Meeting detection enabled")
     }
 
