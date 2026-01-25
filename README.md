@@ -1,6 +1,10 @@
 # Munin
 
-A privacy-focused macOS meeting recorder. Records system audio + microphone, transcribes locally with whisper.cpp, and summarizes via Claude CLI.
+A macOS meeting recorder that keeps your data local and AI-accessible.
+
+**Why Munin?** Meeting transcription services lock your notes in walled gardens where they can't be queried by your own tools. Munin stores everything locally as plain markdown files, making your meeting history available to Claude Code, local search, and any other AI agent you choose to use.
+
+Records system audio + microphone, transcribes locally with whisper.cpp, and summarizes via Claude CLI. Your meetings, your files, your control.
 
 ## Current Status
 
@@ -148,14 +152,13 @@ Munin/
 
 - [ ] Background timer checking upcoming events
 - [ ] Configurable lead time (e.g., 2 minutes before)
-- [ ] Notification offering to Start recording with event name
+- [ ] Notification offering to Start event and recording (use the event link in the invite to start the event!)
 - [ ] Notification that recording started
 - [ ] Preference to enable/disable
 
 ### Future Enhancements
+- Note-taking window when a meeting starts, let me change meeting name and take my own notes which will be combined with the meeting summary
 - Preferences window (storage location, whisper model, etc.)
-- Speaker diarization (who said what) - step one, "Me" (for mic input) and "Them" for system audio
-- Search across all transcripts
 - Global hotkey (Cmd+Shift+R)
 - Real-time transcription display
 
