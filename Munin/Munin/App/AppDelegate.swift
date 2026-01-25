@@ -9,9 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("Munin: applicationDidFinishLaunching")
 
-        // Setup notification handling
+        // Setup notification handling (for completion notifications)
         UNUserNotificationCenter.current().delegate = self
-        MeetingDetectionService.registerNotificationCategory()
 
         Task {
             await checkPermissionsOnLaunch()
@@ -53,23 +52,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     // MARK: - UNUserNotificationCenterDelegate
-
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping () -> Void
-    ) {
-        let categoryIdentifier = response.notification.request.content.categoryIdentifier
-        let actionIdentifier = response.actionIdentifier
-
-        if categoryIdentifier == MeetingDetectionService.notificationCategory {
-            Task { @MainActor in
-                meetingDetectionService.handleNotificationAction(actionIdentifier)
-            }
-        }
-
-        completionHandler()
-    }
 
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,

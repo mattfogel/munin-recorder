@@ -28,6 +28,9 @@
 		A10000010000000000000022 /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000022 /* CalendarService.swift */; };
 		A10000010000000000000023 /* MicActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000023 /* MicActivityMonitor.swift */; };
 		A10000010000000000000024 /* MeetingDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000024 /* MeetingDetectionService.swift */; };
+		A10000010000000000000025 /* MeetingPromptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000025 /* MeetingPromptPanel.swift */; };
+		A10000010000000000000026 /* AudioLevelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000026 /* AudioLevelView.swift */; };
+		A10000010000000000000027 /* RecordingIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000027 /* RecordingIndicatorWindow.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -55,6 +58,9 @@
 		A20000010000000000000022 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
 		A20000010000000000000023 /* MicActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicActivityMonitor.swift; sourceTree = "<group>"; };
 		A20000010000000000000024 /* MeetingDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingDetectionService.swift; sourceTree = "<group>"; };
+		A20000010000000000000025 /* MeetingPromptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPromptPanel.swift; sourceTree = "<group>"; };
+		A20000010000000000000026 /* AudioLevelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioLevelView.swift; sourceTree = "<group>"; };
+		A20000010000000000000027 /* RecordingIndicatorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingIndicatorWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +87,7 @@
 			children = (
 				A40000010000000000000004 /* App */,
 				A40000010000000000000005 /* Menubar */,
+				A4000001000000000000000C /* Views */,
 				A40000010000000000000006 /* Audio */,
 				A40000010000000000000007 /* Processing */,
 				A4000001000000000000000B /* Services */,
@@ -178,6 +185,16 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		A4000001000000000000000C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A20000010000000000000025 /* MeetingPromptPanel.swift */,
+				A20000010000000000000026 /* AudioLevelView.swift */,
+				A20000010000000000000027 /* RecordingIndicatorWindow.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -267,6 +284,9 @@
 				A10000010000000000000022 /* CalendarService.swift in Sources */,
 				A10000010000000000000023 /* MicActivityMonitor.swift in Sources */,
 				A10000010000000000000024 /* MeetingDetectionService.swift in Sources */,
+				A10000010000000000000025 /* MeetingPromptPanel.swift in Sources */,
+				A10000010000000000000026 /* AudioLevelView.swift in Sources */,
+				A10000010000000000000027 /* RecordingIndicatorWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,17 +1,15 @@
 import Foundation
-import UserNotifications
+import AppKit
 
 /// Detects meeting starts via mic activity and prompts user to record
 @MainActor
 final class MeetingDetectionService: ObservableObject {
-    static let notificationCategory = "MEETING_DETECTED"
-    static let actionStartRecording = "START_RECORDING"
-    static let actionDismiss = "DISMISS"
-
+    private static let isEnabledKey = "MeetingDetectionEnabled"
     private static let cooldownDuration: TimeInterval = 10 * 60 // 10 minutes
 
-    @Published var isEnabled: Bool = true {
+    @Published var isEnabled: Bool {
         didSet {
+            UserDefaults.standard.set(isEnabled, forKey: Self.isEnabledKey)
             if isEnabled {
                 startMonitoring()
             } else {
@@ -23,9 +21,12 @@ final class MeetingDetectionService: ObservableObject {
     private let micMonitor = MicActivityMonitor()
     private var cooldownUntil: Date?
     private weak var appState: AppState?
+    private var promptPanel: MeetingPromptPanel?
 
     init(appState: AppState) {
         self.appState = appState
+        // Restore saved preference (default: enabled)
+        self.isEnabled = UserDefaults.standard.object(forKey: Self.isEnabledKey) as? Bool ?? true
         setupMicMonitor()
     }
 
@@ -63,83 +64,49 @@ final class MeetingDetectionService: ObservableObject {
             return
         }
 
-        // Show notification
-        postMeetingDetectedNotification()
+        // Show custom floating prompt
+        showMeetingPrompt()
     }
 
-    private func postMeetingDetectedNotification() {
-        let content = UNMutableNotificationContent()
-        content.title = "Mic Active"
-
-        // Check for calendar event
+    private func showMeetingPrompt() {
+        // Get meeting title from calendar if available
+        let meetingTitle: String?
         if let event = CalendarService.shared.getCurrentEvent() {
-            content.body = "\(event.title ?? "Meeting") - Start recording?"
+            meetingTitle = event.title
         } else {
-            content.body = "Start recording this meeting?"
+            meetingTitle = nil
         }
 
-        content.sound = .default
-        content.categoryIdentifier = Self.notificationCategory
+        // Create panel if needed
+        if promptPanel == nil {
+            promptPanel = MeetingPromptPanel()
+        }
 
-        let request = UNNotificationRequest(
-            identifier: "meeting-detected-\(UUID().uuidString)",
-            content: content,
-            trigger: nil
+        promptPanel?.show(
+            meetingTitle: meetingTitle,
+            onStartRecording: { [weak self] in
+                self?.handleStartRecording()
+            },
+            onDismiss: { [weak self] in
+                self?.handleDismiss()
+            }
         )
 
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Munin: Failed to post meeting notification: \(error)")
-            } else {
-                print("Munin: Posted meeting detection notification")
-            }
+        print("Munin: Showing meeting detection prompt")
+    }
+
+    private func handleStartRecording() {
+        Task {
+            try? await appState?.startRecording()
         }
     }
 
-    func handleNotificationAction(_ actionIdentifier: String) {
-        switch actionIdentifier {
-        case Self.actionStartRecording, UNNotificationDefaultActionIdentifier:
-            // User tapped notification or Start Recording
-            Task {
-                try? await appState?.startRecording()
-            }
-
-        case Self.actionDismiss:
-            // User dismissed - start cooldown
-            startCooldown()
-
-        default:
-            break
-        }
+    private func handleDismiss() {
+        startCooldown()
     }
 
     private func startCooldown() {
         cooldownUntil = Date().addingTimeInterval(Self.cooldownDuration)
         print("Munin: Meeting detection cooldown until \(cooldownUntil!)")
-    }
-
-    // MARK: - Notification Category Setup
-
-    static func registerNotificationCategory() {
-        let startAction = UNNotificationAction(
-            identifier: actionStartRecording,
-            title: "Start Recording",
-            options: [.foreground]
-        )
-
-        let dismissAction = UNNotificationAction(
-            identifier: actionDismiss,
-            title: "Not Now",
-            options: []
-        )
-
-        let category = UNNotificationCategory(
-            identifier: notificationCategory,
-            actions: [startAction, dismissAction],
-            intentIdentifiers: [],
-            options: [.customDismissAction]
-        )
-
-        UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 }

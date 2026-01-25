@@ -8,6 +8,9 @@ final class AudioCaptureCoordinator {
     private var fileWriter: AudioFileWriter?
     private var outputURL: URL?
 
+    /// Callback for audio level updates (for VU meters)
+    var levelHandler: ((AudioMixerLevels) -> Void)?
+
     func startCapture(outputURL: URL) async throws {
         self.outputURL = outputURL
 
@@ -19,6 +22,9 @@ final class AudioCaptureCoordinator {
         audioMixer = try AudioMixer()
         audioMixer?.outputHandler = { [weak self] sampleBuffer in
             self?.fileWriter?.appendSampleBuffer(sampleBuffer)
+        }
+        audioMixer?.levelHandler = { [weak self] levels in
+            self?.levelHandler?(levels)
         }
 
         // Initialize and start system audio capture with separate handlers

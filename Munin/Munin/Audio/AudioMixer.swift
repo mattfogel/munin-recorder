@@ -56,6 +56,12 @@ private final class SoftLimiter {
     }
 }
 
+/// Audio level data for VU meters
+struct AudioMixerLevels: Sendable {
+    let micLevel: Float
+    let systemLevel: Float
+}
+
 /// Outputs stereo audio: Left = Mic, Right = System for diarization
 final class AudioMixer: @unchecked Sendable {
     // Output format: 48kHz stereo float32
@@ -91,6 +97,11 @@ final class AudioMixer: @unchecked Sendable {
 
     // Output
     var outputHandler: ((CMSampleBuffer) -> Void)?
+
+    // Audio level monitoring (for VU meters)
+    var levelHandler: ((AudioMixerLevels) -> Void)?
+    private var lastLevelUpdate: CFAbsoluteTime = 0
+    private let levelUpdateInterval: CFAbsoluteTime = 0.067 // ~15 Hz
 
     // Format descriptions cached for efficiency
     private var outputFormatDescription: CMAudioFormatDescription?
@@ -316,6 +327,9 @@ final class AudioMixer: @unchecked Sendable {
             var micSamples = Array(micBuffer.prefix(bufferSize))
             micBuffer.removeFirst(bufferSize)
 
+            // Calculate and report audio levels (throttled to ~15 Hz)
+            updateAudioLevels(micSamples: micSamples, systemSamples: systemSamples)
+
             // Apply soft limiting per channel (prevents clipping without distortion)
             micLimiter.process(&micSamples)
             systemLimiter.process(&systemSamples)
@@ -411,6 +425,34 @@ final class AudioMixer: @unchecked Sendable {
         return sampleBuffer
     }
 
+    /// Calculate RMS level and update handler (throttled)
+    private func updateAudioLevels(micSamples: [Float], systemSamples: [Float]) {
+        let now = CFAbsoluteTimeGetCurrent()
+        guard now - lastLevelUpdate >= levelUpdateInterval else { return }
+        lastLevelUpdate = now
+
+        let micLevel = calculateRMSLevel(samples: micSamples)
+        let systemLevel = calculateRMSLevel(samples: systemSamples)
+
+        let levels = AudioMixerLevels(micLevel: micLevel, systemLevel: systemLevel)
+        levelHandler?(levels)
+    }
+
+    /// Calculate RMS level (0.0 to 1.0) from audio samples
+    private func calculateRMSLevel(samples: [Float]) -> Float {
+        guard !samples.isEmpty else { return 0 }
+
+        // Calculate RMS using Accelerate
+        var rms: Float = 0
+        vDSP_rmsqv(samples, 1, &rms, vDSP_Length(samples.count))
+
+        // Convert to dB and normalize to 0-1 range
+        // -60 dB = silence, 0 dB = full scale
+        let db = 20 * log10(max(rms, 1e-10))
+        let normalized = (db + 60) / 60 // Map -60..0 dB to 0..1
+        return max(0, min(1, normalized))
+    }
+
     /// Flush remaining samples in buffers
     func flush() {
         processingQueue.sync { [weak self] in
@@ -449,6 +491,7 @@ final class AudioMixer: @unchecked Sendable {
             self.previousOutputTail.removeAll()
             self.startupComplete = false
             self.outputSampleTime = 0
+            self.lastLevelUpdate = 0
             self.micLimiter.reset()
             self.systemLimiter.reset()
         }

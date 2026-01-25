@@ -20,11 +20,13 @@ final class AppState: ObservableObject {
     @Published private(set) var recordingStartTime: Date?
     @Published private(set) var currentMeetingName: String = "unknown-meeting"
     @Published private(set) var lastRecordingURL: URL?
+    @Published private(set) var audioLevels: AudioLevels = .zero
 
     private var audioCaptureCoordinator: AudioCaptureCoordinator?
     private var currentMeetingRecord: MeetingRecord?
     private var currentParticipants: [String] = []
     private let calendarService = CalendarService.shared
+    private var recordingIndicatorWindow: RecordingIndicatorWindow?
 
     var recordingDuration: TimeInterval {
         guard let startTime = recordingStartTime else { return 0 }
@@ -63,6 +65,14 @@ final class AppState: ObservableObject {
         print("Munin: Created folder at \(record.folderURL.path)")
 
         audioCaptureCoordinator = AudioCaptureCoordinator()
+
+        // Set up audio level monitoring for VU meters
+        audioCaptureCoordinator?.levelHandler = { [weak self] levels in
+            Task { @MainActor [weak self] in
+                self?.audioLevels = AudioLevels(micLevel: levels.micLevel, systemLevel: levels.systemLevel)
+            }
+        }
+
         do {
             try await audioCaptureCoordinator?.startCapture(outputURL: record.audioURL)
             print("Munin: Audio capture started successfully")
@@ -74,10 +84,28 @@ final class AppState: ObservableObject {
 
         recordingStartTime = Date()
         state = .recording
+
+        // Show recording indicator window
+        showRecordingIndicator()
+    }
+
+    private func showRecordingIndicator() {
+        if recordingIndicatorWindow == nil {
+            recordingIndicatorWindow = RecordingIndicatorWindow(appState: self)
+        }
+        recordingIndicatorWindow?.showAnimated()
+    }
+
+    private func hideRecordingIndicator() {
+        recordingIndicatorWindow?.hideAnimated()
+        audioLevels = .zero
     }
 
     func stopRecording() async {
         guard state == .recording else { return }
+
+        // Hide recording indicator window
+        hideRecordingIndicator()
 
         state = .processing(.saving)
         lastError = nil
