@@ -4,10 +4,14 @@ A privacy-focused macOS meeting recorder. Records system audio + microphone, tra
 
 ## Current Status
 
-**Working:** Window UI, audio capture (system + mic), file output, transcription pipeline, summarization pipeline, menubar icon (with proper signing).
-
-**Known Issues:**
-- No app icon yet
+**Working:**
+- Window UI and menubar with custom raven icon
+- Audio capture (system + mic) with real-time level monitoring
+- Recording indicator mini-window (hidden from screen share)
+- Auto-detect meetings via mic activity with floating prompt
+- Transcription via whisper.cpp
+- Summarization via Claude CLI
+- Calendar integration for meeting names
 
 ## Architecture
 
@@ -109,13 +113,22 @@ On first run, grant:
 ```
 Munin/
 ├── App/
-│   ├── MuninApp.swift           # @main entry
-│   ├── AppDelegate.swift        # Permission checks
+│   ├── MuninApp.swift           # @main entry, MenuBarExtra
+│   ├── AppDelegate.swift        # Permission checks, app lifecycle
 │   └── AppState.swift           # Recording state machine
+├── Views/
+│   ├── MeetingPromptPanel.swift     # Floating meeting detection prompt
+│   ├── RecordingIndicatorWindow.swift # Mini recording status window
+│   └── AudioLevelView.swift         # VU meter bars
 ├── Audio/
 │   ├── AudioCaptureCoordinator.swift
 │   ├── SystemAudioCapture.swift # Core Audio Taps
+│   ├── AudioMixer.swift         # Real-time mixing + level monitoring
 │   └── AudioFileWriter.swift    # AVAssetWriter
+├── Services/
+│   ├── MeetingDetectionService.swift # Mic activity monitoring
+│   ├── MicActivityMonitor.swift      # Low-level mic detection
+│   └── CalendarService.swift         # EventKit integration
 ├── Processing/
 │   ├── ProcessRunner.swift      # Async subprocess wrapper
 │   ├── TranscriptionService.swift
@@ -130,18 +143,8 @@ Munin/
 
 ## Roadmap
 
-
-### Phase 5: App Detection
-**Goal:** Prompt to record when meeting starts in a meeting app
-
-- [x] Detect meeting has started (e.g. in Zoom, Teams, browser for Meet or browser-based Teams meeting) - investigate if/how we could detect that a meeting has started in one of these apps?
-- [x] Show notification/prompt asking to start recording
-- [x] Quick-start from notification
-- [ ] Custom notification pop-up for better UX
-- [ ] Preference to enable/disable per app
-
-### Phase 6: Calendar Auto-Start
-**Goal:** Begin recording automatically before scheduled meetings
+### Phase 7: Calendar Auto-Start
+**Goal:** Offer to begin recording automatically before scheduled meetings
 
 - [ ] Background timer checking upcoming events
 - [ ] Configurable lead time (e.g., 2 minutes before)

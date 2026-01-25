@@ -9,8 +9,6 @@
 /* Begin PBXBuildFile section */
 		A10000010000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000002 /* AppDelegate.swift */; };
 		A10000010000000000000003 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000003 /* AppState.swift */; };
-		A10000010000000000000004 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000004 /* StatusBarController.swift */; };
-		A10000010000000000000005 /* MenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000005 /* MenuBuilder.swift */; };
 		A10000010000000000000006 /* AudioCaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000006 /* AudioCaptureCoordinator.swift */; };
 		A10000010000000000000007 /* SystemAudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* SystemAudioCapture.swift */; };
 		A10000010000000000000008 /* AudioFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* AudioFileWriter.swift */; };
@@ -36,8 +34,6 @@
 /* Begin PBXFileReference section */
 		A20000010000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A20000010000000000000003 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
-		A20000010000000000000004 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
-		A20000010000000000000005 /* MenuBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBuilder.swift; sourceTree = "<group>"; };
 		A20000010000000000000006 /* AudioCaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureCoordinator.swift; sourceTree = "<group>"; };
 		A20000010000000000000007 /* SystemAudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioCapture.swift; sourceTree = "<group>"; };
 		A20000010000000000000008 /* AudioFileWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFileWriter.swift; sourceTree = "<group>"; };
@@ -86,7 +82,6 @@
 			isa = PBXGroup;
 			children = (
 				A40000010000000000000004 /* App */,
-				A40000010000000000000005 /* Menubar */,
 				A4000001000000000000000C /* Views */,
 				A40000010000000000000006 /* Audio */,
 				A40000010000000000000007 /* Processing */,
@@ -115,15 +110,6 @@
 				A20000010000000000000003 /* AppState.swift */,
 			);
 			path = App;
-			sourceTree = "<group>";
-		};
-		A40000010000000000000005 /* Menubar */ = {
-			isa = PBXGroup;
-			children = (
-				A20000010000000000000004 /* StatusBarController.swift */,
-				A20000010000000000000005 /* MenuBuilder.swift */,
-			);
-			path = Menubar;
 			sourceTree = "<group>";
 		};
 		A40000010000000000000006 /* Audio */ = {
@@ -267,8 +253,6 @@
 				A10000010000000000000020 /* MuninApp.swift in Sources */,
 				A10000010000000000000002 /* AppDelegate.swift in Sources */,
 				A10000010000000000000003 /* AppState.swift in Sources */,
-				A10000010000000000000004 /* StatusBarController.swift in Sources */,
-				A10000010000000000000005 /* MenuBuilder.swift in Sources */,
 				A10000010000000000000006 /* AudioCaptureCoordinator.swift in Sources */,
 				A10000010000000000000007 /* SystemAudioCapture.swift in Sources */,
 				A10000010000000000000008 /* AudioFileWriter.swift in Sources */,

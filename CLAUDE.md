@@ -20,13 +20,18 @@ open Munin/Munin.xcodeproj
 ## Architecture
 
 ```
-User triggers recording
+MeetingDetectionService (mic activity monitoring)
+    ↓
+MeetingPromptPanel (floating NSPanel prompt)
+    ↓
+User triggers recording (or auto-detected)
     ↓
 AppState (state machine: idle → recording → processing)
+    ├─ RecordingIndicatorWindow (mini floating window, hidden from screen share)
     ↓
 AudioCaptureCoordinator
   ├─ SystemAudioCapture (Core Audio Taps + AVAudioEngine)
-  ├─ AudioMixer (real-time stereo mixing via Accelerate/vDSP)
+  ├─ AudioMixer (real-time stereo mixing + RMS levels via Accelerate/vDSP)
   └─ AudioFileWriter (AVAssetWriter → AAC m4a)
     ↓
 TranscriptionService (m4a → wav → whisper.cpp → transcript.md)
@@ -60,13 +65,18 @@ Output: ~/Meetings/DATE/TIME-name/
 
 | Module | Purpose |
 |--------|---------|
-| `/App/AppState.swift` | State machine, recording orchestration |
-| `/Audio/SystemAudioCapture.swift` | Core Audio Taps + mic via AVAudioEngine (~580 lines) |
-| `/Audio/AudioMixer.swift` | Real-time sample mixing, Accelerate-based |
+| `/App/AppState.swift` | State machine, recording orchestration, audio levels |
+| `/Audio/SystemAudioCapture.swift` | Core Audio Taps + mic via AVAudioEngine |
+| `/Audio/AudioMixer.swift` | Real-time stereo mixing, RMS level monitoring (~15Hz) |
+| `/Views/MeetingPromptPanel.swift` | NSPanel floating prompt for meeting detection |
+| `/Views/RecordingIndicatorWindow.swift` | NSPanel mini-window, hidden from screen share |
+| `/Views/AudioLevelView.swift` | SwiftUI VU meter bars |
+| `/Services/MeetingDetectionService.swift` | Mic activity → prompt, UserDefaults persistence |
+| `/Services/MicActivityMonitor.swift` | Detects when any app uses microphone |
+| `/Services/CalendarService.swift` | EventKit integration for meeting names |
 | `/Processing/ProcessRunner.swift` | Async subprocess utility with timeout |
 | `/Processing/TranscriptionService.swift` | whisper.cpp wrapper |
 | `/Processing/SummarizationService.swift` | Claude CLI wrapper (non-fatal on failure) |
-| `/Services/CalendarService.swift` | EventKit integration for meeting detection |
 
 ## Code Style
 
@@ -77,4 +87,9 @@ Output: ~/Meetings/DATE/TIME-name/
 - Combine for reactive state (`@Published`, `@ObservedObject`)
 - Only use AppKit when SwiftUI lacks capability (e.g., Core Audio, low-level system APIs)
 
-**Note:** `Menubar/MenuBuilder.swift` and `Menubar/StatusBarController.swift` are AppKit implementations that were used in the initial version. The app was refactored to use SwiftUI's `MenuBarExtra` in `MuninApp.swift`. These files are compiled but not instantiated — they could be removed or kept as reference.
+**NSPanel usage (for floating windows):**
+- `MeetingPromptPanel` and `RecordingIndicatorWindow` use NSPanel with NSHostingView for SwiftUI content
+- `.nonactivatingPanel` style — doesn't steal focus from other apps
+- `.floating` level — stays above normal windows
+- `sharingType = .none` on recording indicator — hidden from screen share
+
