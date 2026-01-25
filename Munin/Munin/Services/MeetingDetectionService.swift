@@ -111,6 +111,8 @@ final class MeetingDetectionService: ObservableObject {
     }
 
     private func handleStartRecording() {
+        // Stop monitoring immediately to prevent detecting our own mic usage
+        micMonitor.stopMonitoring()
         Task {
             try? await appState?.startRecording()
         }

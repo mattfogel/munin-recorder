@@ -29,6 +29,7 @@
 		A10000010000000000000025 /* MeetingPromptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000025 /* MeetingPromptPanel.swift */; };
 		A10000010000000000000026 /* AudioLevelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000026 /* AudioLevelView.swift */; };
 		A10000010000000000000027 /* RecordingIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000027 /* RecordingIndicatorWindow.swift */; };
+		A10000010000000000000028 /* MuninIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000028 /* MuninIcon.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,6 +58,7 @@
 		A20000010000000000000025 /* MeetingPromptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPromptPanel.swift; sourceTree = "<group>"; };
 		A20000010000000000000026 /* AudioLevelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioLevelView.swift; sourceTree = "<group>"; };
 		A20000010000000000000027 /* RecordingIndicatorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingIndicatorWindow.swift; sourceTree = "<group>"; };
+		A20000010000000000000028 /* MuninIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuninIcon.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -177,6 +179,7 @@
 				A20000010000000000000025 /* MeetingPromptPanel.swift */,
 				A20000010000000000000026 /* AudioLevelView.swift */,
 				A20000010000000000000027 /* RecordingIndicatorWindow.swift */,
+				A20000010000000000000028 /* MuninIcon.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -271,6 +274,7 @@
 				A10000010000000000000025 /* MeetingPromptPanel.swift in Sources */,
 				A10000010000000000000026 /* AudioLevelView.swift in Sources */,
 				A10000010000000000000027 /* RecordingIndicatorWindow.swift in Sources */,
+				A10000010000000000000028 /* MuninIcon.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -123,11 +123,11 @@ private struct MeetingPromptView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header
             HStack(spacing: 8) {
-                Image(systemName: "mic.fill")
-                    .foregroundColor(.red)
-                    .font(.system(size: 14, weight: .semibold))
+                MuninIcon()
+                    .fill(Color.white)
+                    .frame(width: 16, height: 16)
 
-                Text("Mic Active")
+                Text("Meeting detected")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
 

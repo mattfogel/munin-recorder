@@ -138,17 +138,17 @@ private struct RecordingIndicatorView: View {
     @State private var timer: Timer?
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Recording indicator dot
-            Circle()
-                .fill(Color.red)
-                .frame(width: 8, height: 8)
-                .modifier(PulseAnimation())
+        HStack(spacing: 10) {
+            // Recording indicator - Munin icon
+            MuninIcon()
+                .fill(Color.white)
+                .frame(width: 14, height: 14)
 
             // Timer
             Text(formatDuration(elapsedTime))
                 .font(.system(size: 14, weight: .medium, design: .monospaced))
                 .foregroundColor(.white)
+                .fixedSize()
 
             Spacer()
 
@@ -167,7 +167,7 @@ private struct RecordingIndicatorView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(width: 200, height: 56)
         .background(
@@ -207,25 +207,5 @@ private struct RecordingIndicatorView: View {
         } else {
             return String(format: "%d:%02d", minutes, seconds)
         }
-    }
-}
-
-// MARK: - Pulse Animation
-
-private struct PulseAnimation: ViewModifier {
-    @State private var isPulsing = false
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(isPulsing ? 1.2 : 1.0)
-            .opacity(isPulsing ? 0.7 : 1.0)
-            .animation(
-                .easeInOut(duration: 0.8)
-                .repeatForever(autoreverses: true),
-                value: isPulsing
-            )
-            .onAppear {
-                isPulsing = true
-            }
     }
 }
