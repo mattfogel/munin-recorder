@@ -87,6 +87,24 @@ final class AppState: ObservableObject {
 
         // Show recording indicator window
         showRecordingIndicator()
+
+        // Show "Recording Started" notification
+        showRecordingStartedNotification()
+    }
+
+    private func showRecordingStartedNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Recording Started"
+        content.body = currentMeetingName == "unknown-meeting" ? "Recording in progress" : currentMeetingName
+        content.sound = nil // Silent - indicator window is enough
+
+        let request = UNNotificationRequest(
+            identifier: "recording-started-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
     }
 
     private func showRecordingIndicator() {

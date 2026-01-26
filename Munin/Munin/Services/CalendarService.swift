@@ -97,6 +97,51 @@ final class CalendarService {
         }
     }
 
+    /// Extract meeting link from an event (Zoom, Meet, Teams, etc.)
+    func getMeetingLink(event: EKEvent) -> URL? {
+        // 1. Check event.url first (most reliable)
+        if let url = event.url {
+            return url
+        }
+
+        // URL patterns for common meeting providers
+        let meetingPatterns = [
+            "https?://[^\\s]*zoom\\.us/[^\\s]+",
+            "https?://meet\\.google\\.com/[^\\s]+",
+            "https?://teams\\.microsoft\\.com/[^\\s]+",
+            "https?://[^\\s]*webex\\.com/[^\\s]+",
+            "https?://[^\\s]*gotomeeting\\.com/[^\\s]+"
+        ]
+
+        let combinedPattern = meetingPatterns.joined(separator: "|")
+
+        // 2. Check event.notes
+        if let notes = event.notes, let url = extractURL(from: notes, pattern: combinedPattern) {
+            return url
+        }
+
+        // 3. Check event.location (sometimes contains URL)
+        if let location = event.location, let url = extractURL(from: location, pattern: combinedPattern) {
+            return url
+        }
+
+        return nil
+    }
+
+    private func extractURL(from text: String, pattern: String) -> URL? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+            return nil
+        }
+
+        let range = NSRange(text.startIndex..., in: text)
+        if let match = regex.firstMatch(in: text, options: [], range: range),
+           let matchRange = Range(match.range, in: text) {
+            let urlString = String(text[matchRange])
+            return URL(string: urlString)
+        }
+        return nil
+    }
+
     /// Sanitize event title for use as folder name
     func sanitizeForFilename(_ title: String) -> String {
         // Remove/replace characters invalid for filenames

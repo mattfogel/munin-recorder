@@ -30,6 +30,7 @@
 		A10000010000000000000026 /* AudioLevelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000026 /* AudioLevelView.swift */; };
 		A10000010000000000000027 /* RecordingIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000027 /* RecordingIndicatorWindow.swift */; };
 		A10000010000000000000028 /* MuninIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000028 /* MuninIcon.swift */; };
+		A10000010000000000000029 /* CalendarAutoStartService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000029 /* CalendarAutoStartService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -59,6 +60,7 @@
 		A20000010000000000000026 /* AudioLevelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioLevelView.swift; sourceTree = "<group>"; };
 		A20000010000000000000027 /* RecordingIndicatorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingIndicatorWindow.swift; sourceTree = "<group>"; };
 		A20000010000000000000028 /* MuninIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuninIcon.swift; sourceTree = "<group>"; };
+		A20000010000000000000029 /* CalendarAutoStartService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAutoStartService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -167,6 +169,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000010000000000000022 /* CalendarService.swift */,
+				A20000010000000000000029 /* CalendarAutoStartService.swift */,
 				A20000010000000000000023 /* MicActivityMonitor.swift */,
 				A20000010000000000000024 /* MeetingDetectionService.swift */,
 			);
@@ -271,6 +274,7 @@
 				A10000010000000000000022 /* CalendarService.swift in Sources */,
 				A10000010000000000000023 /* MicActivityMonitor.swift in Sources */,
 				A10000010000000000000024 /* MeetingDetectionService.swift in Sources */,
+				A10000010000000000000029 /* CalendarAutoStartService.swift in Sources */,
 				A10000010000000000000025 /* MeetingPromptPanel.swift in Sources */,
 				A10000010000000000000026 /* AudioLevelView.swift in Sources */,
 				A10000010000000000000027 /* RecordingIndicatorWindow.swift in Sources */,

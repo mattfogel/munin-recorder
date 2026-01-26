@@ -13,7 +13,11 @@ struct MuninApp: App {
         .defaultSize(width: 300, height: 200)
 
         MenuBarExtra("Munin", image: "MenuBarIcon") {
-            MenuBarView(appState: appDelegate.appState, meetingDetection: appDelegate.meetingDetectionService)
+            MenuBarView(
+                appState: appDelegate.appState,
+                meetingDetection: appDelegate.meetingDetectionService,
+                calendarAutoStart: appDelegate.calendarAutoStartService
+            )
         }
         .menuBarExtraStyle(.menu)
     }
@@ -188,6 +192,7 @@ struct ContentView: View {
 struct MenuBarView: View {
     @ObservedObject var appState: AppState
     @ObservedObject var meetingDetection: MeetingDetectionService
+    @ObservedObject var calendarAutoStart: CalendarAutoStartService
 
     private var upcomingEvents: [EKEvent] {
         CalendarService.shared.getUpcomingEvents(limit: 2)
@@ -240,6 +245,7 @@ struct MenuBarView: View {
         Divider()
 
         Toggle("Auto-detect Meetings", isOn: $meetingDetection.isEnabled)
+        Toggle("Calendar Auto-Start", isOn: $calendarAutoStart.isEnabled)
 
         Divider()
 
