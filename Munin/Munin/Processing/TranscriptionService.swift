@@ -159,16 +159,34 @@ final class TranscriptionService {
     ) async throws -> [TranscriptSegment] {
         let outputBase = wavURL.deletingPathExtension()
 
-        // Run whisper with VTT output for timestamps
+        var segmentationFlags: [String] = [
+            "--split-on-word",
+            "--max-len", "120"
+        ]
+        let vadModelPath = NSHomeDirectory() + "/.munin/models/ggml-silero-v6.2.0.bin"
+        if FileManager.default.fileExists(atPath: vadModelPath) {
+            segmentationFlags += [
+                "--vad",
+                "--vad-model", vadModelPath,
+                "--vad-threshold", "0.60",
+                "--vad-min-silence-duration-ms", "300",
+                "--vad-max-speech-duration-s", "15",
+                "--vad-speech-pad-ms", "20"
+            ]
+        }
+
+        // Run whisper with VTT + JSON + word output for timestamps
         let result = try await ProcessRunner.run(
             executablePath: whisperPath,
             arguments: [
                 "-m", modelPath,
                 "-f", wavURL.path,
                 "-ovtt",  // VTT format has timestamps
+                "-oj",
+                "-owts",
                 "-of", outputBase.path,
                 "--print-progress"
-            ],
+            ] + segmentationFlags,
             timeout: 1800
         )
 
@@ -176,9 +194,20 @@ final class TranscriptionService {
             throw TranscriptionError.transcriptionFailed(result.stderr)
         }
 
-        // Parse VTT file
         let vttURL = outputBase.appendingPathExtension("vtt")
-        defer { try? FileManager.default.removeItem(at: vttURL) }
+        let jsonURL = outputBase.appendingPathExtension("json")
+        let wtsURL = outputBase.appendingPathExtension("wts")
+
+        defer {
+            try? FileManager.default.removeItem(at: vttURL)
+            try? FileManager.default.removeItem(at: jsonURL)
+            try? FileManager.default.removeItem(at: wtsURL)
+        }
+
+        let wordSegments = parseWordTimings(outputBase: outputBase, speaker: speaker)
+        if !wordSegments.isEmpty {
+            return wordSegments
+        }
 
         guard FileManager.default.fileExists(atPath: vttURL.path) else {
             return []
@@ -186,6 +215,227 @@ final class TranscriptionService {
 
         let vttContent = try String(contentsOf: vttURL, encoding: .utf8)
         return parseVTT(content: vttContent, speaker: speaker)
+    }
+
+    private struct WordTiming {
+        let startMs: Int
+        let endMs: Int
+        let text: String
+    }
+
+    private func parseWordTimings(outputBase: URL, speaker: String) -> [TranscriptSegment] {
+        let wtsURL = outputBase.appendingPathExtension("wts")
+        if let words = parseWTS(url: wtsURL), !words.isEmpty {
+            return segmentWords(words, speaker: speaker)
+        }
+
+        let jsonURL = outputBase.appendingPathExtension("json")
+        if let words = parseJSONWords(url: jsonURL), !words.isEmpty {
+            return segmentWords(words, speaker: speaker)
+        }
+
+        return []
+    }
+
+    private func parseWTS(url: URL) -> [WordTiming]? {
+        guard FileManager.default.fileExists(atPath: url.path),
+              let content = try? String(contentsOf: url, encoding: .utf8) else {
+            return nil
+        }
+
+        var words: [WordTiming] = []
+        let lines = content.components(separatedBy: .newlines)
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+
+            let cleaned = trimmed
+                .replacingOccurrences(of: "[", with: "")
+                .replacingOccurrences(of: "]", with: "")
+                .replacingOccurrences(of: ",", with: " ")
+
+            let tokens = cleaned.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+            if tokens.count < 3 { continue }
+
+            var startToken: String?
+            var endToken: String?
+            var wordTokens: [String] = []
+
+            if let arrowIndex = tokens.firstIndex(of: "-->") {
+                if arrowIndex > 0, arrowIndex + 1 < tokens.count {
+                    startToken = tokens[arrowIndex - 1]
+                    endToken = tokens[arrowIndex + 1]
+                    if arrowIndex + 2 < tokens.count {
+                        wordTokens = Array(tokens[(arrowIndex + 2)...])
+                    }
+                }
+            } else {
+                startToken = tokens[0]
+                endToken = tokens[1]
+                wordTokens = Array(tokens[2...])
+            }
+
+            guard let start = startToken, let end = endToken,
+                  let startMs = parseTimeToken(start, key: "start"),
+                  let endMs = parseTimeToken(end, key: "end") else {
+                continue
+            }
+
+            let word = wordTokens.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            if word.isEmpty { continue }
+            words.append(WordTiming(startMs: startMs, endMs: endMs, text: word))
+        }
+
+        return words
+    }
+
+    private func parseJSONWords(url: URL) -> [WordTiming]? {
+        guard FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+
+        guard let jsonObject = try? JSONSerialization.jsonObject(with: data),
+              let root = jsonObject as? [String: Any],
+              let segments = root["segments"] as? [[String: Any]] else {
+            return nil
+        }
+
+        var words: [WordTiming] = []
+        for segment in segments {
+            if let wordsArray = segment["words"] as? [[String: Any]] {
+                for wordInfo in wordsArray {
+                    guard let wordText = (wordInfo["word"] as? String) ?? (wordInfo["text"] as? String),
+                          let startMs = parseTimeValue(wordInfo["start"], key: "start") ?? parseTimeValue(wordInfo["t0"], key: "t0"),
+                          let endMs = parseTimeValue(wordInfo["end"], key: "end") ?? parseTimeValue(wordInfo["t1"], key: "t1") else {
+                        continue
+                    }
+                    let trimmed = wordText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.isEmpty { continue }
+                    words.append(WordTiming(startMs: startMs, endMs: endMs, text: trimmed))
+                }
+            }
+        }
+
+        return words
+    }
+
+    private func parseTimeToken(_ token: String, key: String) -> Int? {
+        if token.contains(":") {
+            return parseTimestamp(token)
+        }
+        if let value = Double(token) {
+            return convertTimeValueToMs(value, key: key)
+        }
+        return nil
+    }
+
+    private func parseTimeValue(_ value: Any?, key: String) -> Int? {
+        if let doubleValue = value as? Double {
+            return convertTimeValueToMs(doubleValue, key: key)
+        }
+        if let intValue = value as? Int {
+            return convertTimeValueToMs(Double(intValue), key: key)
+        }
+        if let stringValue = value as? String, let doubleValue = Double(stringValue) {
+            return convertTimeValueToMs(doubleValue, key: key)
+        }
+        return nil
+    }
+
+    private func convertTimeValueToMs(_ value: Double, key: String) -> Int {
+        if key == "t0" || key == "t1" {
+            return Int((value * 10.0).rounded())
+        }
+        if value > 1000 {
+            return Int(value.rounded())
+        }
+        return Int((value * 1000.0).rounded())
+    }
+
+    private func segmentWords(_ words: [WordTiming], speaker: String) -> [TranscriptSegment] {
+        guard !words.isEmpty else { return [] }
+
+        let wordGapMs = 800
+        let punctuationGapMs = 250
+        let maxSegmentChars = 160
+
+        var segments: [TranscriptSegment] = []
+        var currentText = ""
+        var segmentStart = words[0].startMs
+        var segmentEnd = words[0].endMs
+        var previousEnd = words[0].endMs
+        var previousWord = ""
+
+        for word in words {
+            let gap = max(0, word.startMs - previousEnd)
+            let endsSentence = previousWord.trimmingCharacters(in: .whitespacesAndNewlines).last
+                .map { ".!?".contains($0) } ?? false
+
+            let projectedLength = currentText.count + word.text.count + 1
+            let shouldBreak = currentText.isEmpty == false && (
+                gap >= wordGapMs ||
+                (endsSentence && gap >= punctuationGapMs) ||
+                projectedLength >= maxSegmentChars
+            )
+
+            if shouldBreak {
+                segments.append(TranscriptSegment(
+                    startMs: segmentStart,
+                    endMs: segmentEnd,
+                    speaker: speaker,
+                    text: currentText.trimmingCharacters(in: .whitespaces)
+                ))
+                currentText = ""
+                segmentStart = word.startMs
+            }
+
+            appendWord(word.text, to: &currentText)
+            segmentEnd = word.endMs
+            previousEnd = word.endMs
+            previousWord = word.text
+        }
+
+        if !currentText.trimmingCharacters(in: .whitespaces).isEmpty {
+            segments.append(TranscriptSegment(
+                startMs: segmentStart,
+                endMs: segmentEnd,
+                speaker: speaker,
+                text: currentText.trimmingCharacters(in: .whitespaces)
+            ))
+        }
+
+        return segments
+    }
+
+    private func appendWord(_ word: String, to text: inout String) {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let noSpaceBefore = ".,!?;:%)]"
+        let noSpaceAfter = "("
+
+        if text.isEmpty {
+            text = trimmed
+            return
+        }
+
+        if let first = trimmed.first, noSpaceBefore.contains(first) {
+            text += trimmed
+            return
+        }
+
+        if trimmed.hasPrefix("'") {
+            text += trimmed
+            return
+        }
+
+        if let last = text.last, noSpaceAfter.contains(last) {
+            text += trimmed
+            return
+        }
+
+        text += " " + trimmed
     }
 
     /// Parse VTT format: "00:00:00.000 --> 00:00:02.500\nText"
@@ -278,20 +528,42 @@ final class TranscriptionService {
             lines.append("")
         }
 
+        let gapThresholdMs = 1500
         var currentSpeaker = ""
+        var previousEndMs: Int? = nil
         for segment in segments {
-            if segment.speaker != currentSpeaker {
+            let gapMs: Int
+            if let previousEndMs = previousEndMs {
+                gapMs = max(0, segment.startMs - previousEndMs)
+            } else {
+                gapMs = 0
+            }
+
+            if segment.speaker != currentSpeaker || gapMs >= gapThresholdMs {
                 if !currentSpeaker.isEmpty {
-                    lines.append("")  // Blank line between speakers
+                    lines.append("")  // Blank line between speakers or long pauses
                 }
                 currentSpeaker = segment.speaker
                 lines.append("**\(segment.speaker):**")
             }
-            lines.append(segment.text)
+
+            let timestamp = formatTimestamp(segment.startMs)
+            lines.append("[\(timestamp)] \(segment.text)")
+            previousEndMs = segment.endMs
         }
 
         let content = lines.joined(separator: "\n")
         try content.write(to: outputURL, atomically: true, encoding: .utf8)
+    }
+
+    /// Format milliseconds into "HH:MM:SS.mmm"
+    private func formatTimestamp(_ ms: Int) -> String {
+        let totalSeconds = max(0, ms) / 1000
+        let millis = max(0, ms) % 1000
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%02d:%02d:%02d.%03d", hours, minutes, seconds, millis)
     }
 
     private static func findModel() -> String? {

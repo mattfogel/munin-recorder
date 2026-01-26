@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import CoreAudio
 
 @MainActor
 final class AudioCaptureCoordinator {
@@ -26,17 +27,17 @@ final class AudioCaptureCoordinator {
         audioMixer?.levelHandler = { [weak self] levels in
             self?.levelHandler?(levels)
         }
-
         // Initialize and start system audio capture with separate handlers
         systemCapture = try await SystemAudioCapture(
-            systemAudioHandler: { [weak self] sampleBuffer in
-                self?.audioMixer?.appendSystemAudio(sampleBuffer)
+            systemAudioHandler: { [weak self] sampleBuffer, hostTime in
+                self?.audioMixer?.appendSystemAudio(sampleBuffer, hostTime: hostTime)
             },
-            microphoneHandler: { [weak self] sampleBuffer in
-                self?.audioMixer?.appendMicrophoneAudio(sampleBuffer)
+            microphoneHandler: { [weak self] sampleBuffer, hostTime in
+                self?.audioMixer?.appendMicrophoneAudio(sampleBuffer, hostTime: hostTime)
             }
         )
 
+        audioMixer?.setBaseHostTime(AudioGetCurrentHostTime())
         try await systemCapture?.startCapture()
     }
 

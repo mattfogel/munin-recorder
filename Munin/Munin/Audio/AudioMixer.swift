@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import CoreAudio
 import CoreMedia
 import Accelerate
 
@@ -91,6 +92,14 @@ final class AudioMixer: @unchecked Sendable {
 
     // Timing
     private var outputSampleTime: Int64 = 0
+    private var baseHostTime: UInt64?
+    private let hostClockFrequency: Double = {
+        let frequency = AudioGetHostClockFrequency()
+        return frequency > 0 ? frequency : 1
+    }()
+    private let maxTimestampJitterSamples: Int64 = 128
+    private var systemExpectedSampleTime: Int64 = 0
+    private var micExpectedSampleTime: Int64 = 0
 
     // Previous output for crossfading between buffers
     private var previousOutputTail: [Float] = []
@@ -144,29 +153,101 @@ final class AudioMixer: @unchecked Sendable {
 
     func appendSystemAudio(_ sampleBuffer: CMSampleBuffer) {
         processingQueue.async { [weak self] in
-            self?.appendToBuffer(sampleBuffer, isSystem: true)
+            self?.appendToBuffer(sampleBuffer, hostTime: nil, isSystem: true)
+        }
+    }
+
+    func appendSystemAudio(_ sampleBuffer: CMSampleBuffer, hostTime: UInt64) {
+        processingQueue.async { [weak self] in
+            self?.appendToBuffer(sampleBuffer, hostTime: hostTime, isSystem: true)
         }
     }
 
     func appendMicrophoneAudio(_ sampleBuffer: CMSampleBuffer) {
         processingQueue.async { [weak self] in
-            self?.appendToBuffer(sampleBuffer, isMicrophone: true)
+            self?.appendToBuffer(sampleBuffer, hostTime: nil, isMicrophone: true)
         }
     }
 
-    private func appendToBuffer(_ sampleBuffer: CMSampleBuffer, isSystem: Bool = false, isMicrophone: Bool = false) {
+    func appendMicrophoneAudio(_ sampleBuffer: CMSampleBuffer, hostTime: UInt64) {
+        processingQueue.async { [weak self] in
+            self?.appendToBuffer(sampleBuffer, hostTime: hostTime, isMicrophone: true)
+        }
+    }
+
+    func setBaseHostTime(_ hostTime: UInt64) {
+        processingQueue.sync { [weak self] in
+            self?.baseHostTime = hostTime
+        }
+    }
+
+    private func appendToBuffer(_ sampleBuffer: CMSampleBuffer, hostTime: UInt64?, isSystem: Bool = false, isMicrophone: Bool = false) {
         guard let samples = extractFloatSamples(from: sampleBuffer, isSystem: isSystem, isMicrophone: isMicrophone) else {
             return
         }
 
+        let bufferStartSampleTime: Int64
+        if let hostTime = hostTime {
+            bufferStartSampleTime = sampleTimeFromHostTime(hostTime)
+        } else {
+            bufferStartSampleTime = isSystem ? systemExpectedSampleTime : micExpectedSampleTime
+        }
         if isSystem {
-            systemBuffer.append(contentsOf: samples)
+            appendAlignedSamples(
+                samples,
+                to: &systemBuffer,
+                expectedSampleTime: &systemExpectedSampleTime,
+                startSampleTime: bufferStartSampleTime
+            )
         } else if isMicrophone {
-            micBuffer.append(contentsOf: samples)
+            appendAlignedSamples(
+                samples,
+                to: &micBuffer,
+                expectedSampleTime: &micExpectedSampleTime,
+                startSampleTime: bufferStartSampleTime
+            )
         }
 
         // Process when we have enough samples from both sources
         processBuffers()
+    }
+
+    private func sampleTimeFromHostTime(_ hostTime: UInt64) -> Int64 {
+        if baseHostTime == nil {
+            baseHostTime = hostTime
+        }
+        guard let base = baseHostTime else { return 0 }
+        let delta = hostTime >= base ? hostTime - base : 0
+        let seconds = Double(delta) / hostClockFrequency
+        return Int64((seconds * sampleRate).rounded())
+    }
+
+    private func appendAlignedSamples(
+        _ samples: [Float],
+        to buffer: inout [Float],
+        expectedSampleTime: inout Int64,
+        startSampleTime: Int64
+    ) {
+        var alignedSamples = samples
+        var delta = startSampleTime - expectedSampleTime
+
+        if delta < 0, abs(delta) <= maxTimestampJitterSamples {
+            delta = 0
+        }
+
+        if delta > 0 {
+            buffer.append(contentsOf: [Float](repeating: 0, count: Int(delta)))
+            expectedSampleTime += delta
+        } else if delta < 0 {
+            let overlap = min(Int(-delta), alignedSamples.count)
+            if overlap >= alignedSamples.count {
+                return
+            }
+            alignedSamples.removeFirst(overlap)
+        }
+
+        buffer.append(contentsOf: alignedSamples)
+        expectedSampleTime += Int64(alignedSamples.count)
     }
 
     private func extractFloatSamples(from sampleBuffer: CMSampleBuffer, isSystem: Bool, isMicrophone: Bool) -> [Float]? {
@@ -492,6 +573,9 @@ final class AudioMixer: @unchecked Sendable {
             self.startupComplete = false
             self.outputSampleTime = 0
             self.lastLevelUpdate = 0
+            self.baseHostTime = nil
+            self.systemExpectedSampleTime = 0
+            self.micExpectedSampleTime = 0
             self.micLimiter.reset()
             self.systemLimiter.reset()
         }

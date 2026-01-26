@@ -12,8 +12,8 @@ final class SystemAudioCapture: @unchecked Sendable {
     private var deviceProcID: AudioDeviceIOProcID?
     private var micEngine: AVAudioEngine?
 
-    private let systemAudioHandler: (CMSampleBuffer) -> Void
-    private let microphoneHandler: (CMSampleBuffer) -> Void
+    private let systemAudioHandler: (CMSampleBuffer, UInt64) -> Void
+    private let microphoneHandler: (CMSampleBuffer, UInt64) -> Void
 
     private var systemSampleTime: Int64 = 0
     private var micSampleTime: Int64 = 0
@@ -22,8 +22,8 @@ final class SystemAudioCapture: @unchecked Sendable {
     private var isCapturing = false
 
     init(
-        systemAudioHandler: @escaping (CMSampleBuffer) -> Void,
-        microphoneHandler: @escaping (CMSampleBuffer) -> Void
+        systemAudioHandler: @escaping (CMSampleBuffer, UInt64) -> Void,
+        microphoneHandler: @escaping (CMSampleBuffer, UInt64) -> Void
     ) async throws {
         self.systemAudioHandler = systemAudioHandler
         self.microphoneHandler = microphoneHandler
@@ -240,8 +240,10 @@ final class SystemAudioCapture: @unchecked Sendable {
             let frameCount = Int(buffer.mDataByteSize) / Int(tapFormat.mBytesPerFrame)
             guard frameCount > 0 else { return }
 
+            let hostTime = self.extractHostTime(inNow: inNow, inInputTime: inInputTime, inOutputTime: inOutputTime)
+
             // Convert to float samples and create CMSampleBuffer
-            self.processSystemAudioData(data: data, frameCount: frameCount, format: tapFormat)
+            self.processSystemAudioData(data: data, frameCount: frameCount, format: tapFormat, hostTime: hostTime)
         }
 
         var err = AudioDeviceCreateIOProcIDWithBlock(&procID, aggregateDeviceID, nil, ioBlock)
@@ -265,7 +267,7 @@ final class SystemAudioCapture: @unchecked Sendable {
     private var systemAudioCallbackCount = 0
     private var lastSystemAudioLogTime: Date = .distantPast
 
-    private func processSystemAudioData(data: UnsafeMutableRawPointer, frameCount: Int, format: AudioStreamBasicDescription) {
+    private func processSystemAudioData(data: UnsafeMutableRawPointer, frameCount: Int, format: AudioStreamBasicDescription, hostTime: UInt64) {
         systemAudioCallbackCount += 1
 
         // Convert to float samples based on format
@@ -318,7 +320,7 @@ final class SystemAudioCapture: @unchecked Sendable {
             sampleTime: &systemSampleTime
         ) else { return }
 
-        systemAudioHandler(sampleBuffer)
+        systemAudioHandler(sampleBuffer, hostTime)
     }
 
     private func startMicrophoneCapture() throws {
@@ -341,15 +343,15 @@ final class SystemAudioCapture: @unchecked Sendable {
             throw AudioCaptureError.failedToCreateFormat
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: floatFormat) { [weak self] buffer, _ in
-            self?.processMicrophoneBuffer(buffer, converter: nil)
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: floatFormat) { [weak self] buffer, time in
+            self?.processMicrophoneBuffer(buffer, time: time, converter: nil)
         }
 
         try engine.start()
         print("Munin: Microphone capture started (float format)")
     }
 
-    private func processMicrophoneBuffer(_ buffer: AVAudioPCMBuffer, converter: AVAudioConverter?) {
+    private func processMicrophoneBuffer(_ buffer: AVAudioPCMBuffer, time: AVAudioTime, converter: AVAudioConverter?) {
         // Pass through at native sample rate - AudioMixer handles resampling via AVAudioConverter
         guard let samples = extractFloats(from: buffer) else { return }
         guard let sampleBuffer = createSampleBuffer(
@@ -358,7 +360,31 @@ final class SystemAudioCapture: @unchecked Sendable {
             sampleTime: &micSampleTime
         ) else { return }
 
-        microphoneHandler(sampleBuffer)
+        let hostTime: UInt64
+        if time.isHostTimeValid {
+            hostTime = time.hostTime
+        } else {
+            hostTime = AudioGetCurrentHostTime()
+        }
+
+        microphoneHandler(sampleBuffer, hostTime)
+    }
+
+    private func extractHostTime(
+        inNow: UnsafePointer<AudioTimeStamp>?,
+        inInputTime: UnsafePointer<AudioTimeStamp>?,
+        inOutputTime: UnsafePointer<AudioTimeStamp>?
+    ) -> UInt64 {
+        if let inputTime = inInputTime, inputTime.pointee.mFlags.contains(.hostTimeValid) {
+            return inputTime.pointee.mHostTime
+        }
+        if let nowTime = inNow, nowTime.pointee.mFlags.contains(.hostTimeValid) {
+            return nowTime.pointee.mHostTime
+        }
+        if let outputTime = inOutputTime, outputTime.pointee.mFlags.contains(.hostTimeValid) {
+            return outputTime.pointee.mHostTime
+        }
+        return AudioGetCurrentHostTime()
     }
 
     private func extractFloats(from buffer: AVAudioPCMBuffer) -> [Float]? {

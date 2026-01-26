@@ -48,6 +48,13 @@ Output: ~/Meetings/DATE/TIME-name/
 - Whisper input: 16kHz 16-bit PCM WAV (converted via afconvert)
 - File output: AAC m4a, 48kHz stereo, 128kbps
 
+**Transcription segmentation:**
+- Uses whisper.cpp `--split-on-word` plus VTT/JSON/word outputs.
+- Word-level timings are re-segmented in `TranscriptionService` to prevent long cues spanning silence.
+- If `~/.munin/models/ggml-silero-v6.2.0.bin` exists, VAD is enabled to split on silence.
+- Tuning knobs: whisper `--max-len`, VAD (`--vad-min-silence-duration-ms`, `--vad-max-speech-duration-s`, `--vad-threshold`, `--vad-speech-pad-ms`),
+  and word segmentation in `TranscriptionService` (`wordGapMs`, `punctuationGapMs`, `maxSegmentChars`).
+
 **Threading:**
 - `@MainActor` on AppState, AppDelegate for UI/state
 - `@unchecked Sendable` on audio classes with dedicated dispatch queues
@@ -92,4 +99,3 @@ Output: ~/Meetings/DATE/TIME-name/
 - `.nonactivatingPanel` style — doesn't steal focus from other apps
 - `.floating` level — stays above normal windows
 - `sharingType = .none` on recording indicator — hidden from screen share
-

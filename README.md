@@ -77,6 +77,15 @@ mkdir -p ~/.munin/models
 cp models/ggml-base.en.bin ~/.munin/models/
 ```
 
+### 3b. (Optional but recommended) Install VAD model
+
+For better segmentation across silence, install the Silero VAD model:
+
+```bash
+mkdir -p ~/.munin/models
+cp path/to/ggml-silero-v6.2.0.bin ~/.munin/models/
+```
+
 ### 4. Install Claude CLI
 
 ```bash
@@ -157,6 +166,7 @@ Munin/
 - [ ] Preference to enable/disable
 
 ### Future Enhancements
+- Add CLI args to simplify Claude Code calls? (e.g. if it's possible to not load plugins/mcps, not store history, etc)
 - Note-taking window when a meeting starts, let me change meeting name and take my own notes which will be combined with the meeting summary
 - Preferences window (storage location, whisper model, etc.)
 - Global hotkey (Cmd+Shift+R)
@@ -188,7 +198,19 @@ Stereo output (mic on left, system on right) with per-channel soft limiting. If 
 Uses Core Audio Taps for system audio capture. Microphone captured via AVAudioEngine. Output is stereo (mic=left, system=right) for speaker diarization, with soft limiting to prevent clipping.
 
 ### Transcription
-Converts m4a → wav via `afconvert`, then runs whisper.cpp with `--output-txt --output-vtt`.
+Converts m4a → wav via `afconvert`, then runs whisper.cpp with VTT + JSON + word timings.
+Word-level timings are re-segmented in-app to avoid long cues spanning silence.
+If `~/.munin/models/ggml-silero-v6.2.0.bin` exists, VAD is enabled to split on silence.
+
+**Tuning knobs (transcription):**
+- `--max-len`: lower for shorter segments, higher for fewer splits.
+- VAD: `--vad-min-silence-duration-ms`, `--vad-max-speech-duration-s`, `--vad-threshold`, `--vad-speech-pad-ms`.
+- Word segmentation in `TranscriptionService`: `wordGapMs`, `punctuationGapMs`, `maxSegmentChars`.
+
+**Troubleshooting (transcription timing/segmentation):**
+- Lines appear too early: reduce `--max-len`, lower `--vad-max-speech-duration-s`, or reduce `wordGapMs`.
+- Over-splitting/fragmented lines: increase `--max-len`, raise `--vad-min-silence-duration-ms`, or increase `wordGapMs`.
+- Missing quiet speech: lower `--vad-threshold` or increase `--vad-speech-pad-ms`.
 
 ### Summarization
 Invokes `claude --print -p "..." < transcript.md` and captures stdout.
