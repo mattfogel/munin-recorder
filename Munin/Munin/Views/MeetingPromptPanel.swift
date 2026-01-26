@@ -21,13 +21,14 @@ final class MeetingPromptPanel: NSPanel {
 
     private func configure() {
         // Window behavior
-        // Use shielding window level to appear above system notifications
-        level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        // Use assistive tech level - designed for windows that must appear above all
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.assistiveTechHighWindow)))
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         isFloatingPanel = true
         becomesKeyOnlyIfNeeded = true
         hidesOnDeactivate = false
         isMovableByWindowBackground = true
+        ignoresMouseEvents = false
 
         // Visual style
         backgroundColor = .clear
