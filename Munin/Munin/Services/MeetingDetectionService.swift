@@ -84,13 +84,8 @@ final class MeetingDetectionService: ObservableObject {
     }
 
     private func showMeetingPrompt() {
-        // Get meeting title from calendar if available
-        let meetingTitle: String?
-        if let event = CalendarService.shared.getCurrentEvent() {
-            meetingTitle = event.title
-        } else {
-            meetingTitle = nil
-        }
+        // Detect which app is using the microphone
+        let appName = micMonitor.detectMicUsingApp()
 
         // Create panel if needed
         if promptPanel == nil {
@@ -98,7 +93,7 @@ final class MeetingDetectionService: ObservableObject {
         }
 
         promptPanel?.show(
-            meetingTitle: meetingTitle,
+            appName: appName,
             onStartRecording: { [weak self] in
                 self?.handleStartRecording()
             },
@@ -107,7 +102,7 @@ final class MeetingDetectionService: ObservableObject {
             }
         )
 
-        print("Munin: Showing meeting detection prompt")
+        print("Munin: Showing meeting detection prompt for app: \(appName ?? "unknown")")
     }
 
     private func handleStartRecording() {

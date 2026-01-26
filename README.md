@@ -166,6 +166,9 @@ Munin/
 - [ ] Preference to enable/disable
 
 ### Future Enhancements
+- Smart meeting detection (Accessibility APIs to detect Zoom's "Meeting" menu, Teams windows)
+- Auto-stop recording when meeting ends
+- Speaker diarization using stereo channel separation
 - Add CLI args to simplify Claude Code calls? (e.g. if it's possible to not load plugins/mcps, not store history, etc)
 - Note-taking window when a meeting starts, let me change meeting name and take my own notes which will be combined with the meeting summary
 - Preferences window (storage location, whisper model, etc.)

@@ -10,7 +10,7 @@ final class MeetingPromptPanel: NSPanel {
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 120),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 100),
             styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -21,7 +21,9 @@ final class MeetingPromptPanel: NSPanel {
 
     private func configure() {
         // Window behavior
-        level = .floating
+        // Use shielding window level to appear above system notifications
+        level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         isFloatingPanel = true
         becomesKeyOnlyIfNeeded = true
         hidesOnDeactivate = false
@@ -51,13 +53,13 @@ final class MeetingPromptPanel: NSPanel {
         setFrameOrigin(NSPoint(x: x, y: y))
     }
 
-    func show(meetingTitle: String?, onStartRecording: @escaping () -> Void, onDismiss: @escaping () -> Void) {
+    func show(appName: String?, onStartRecording: @escaping () -> Void, onDismiss: @escaping () -> Void) {
         self.onStartRecording = onStartRecording
         self.onDismiss = onDismiss
 
         // Create SwiftUI content
         let contentView = MeetingPromptView(
-            meetingTitle: meetingTitle ?? "Unknown Meeting",
+            appName: appName,
             onStartRecording: { [weak self] in
                 self?.handleStartRecording()
             },
@@ -115,9 +117,17 @@ final class MeetingPromptPanel: NSPanel {
 // MARK: - SwiftUI Content View
 
 private struct MeetingPromptView: View {
-    let meetingTitle: String
+    let appName: String?
     let onStartRecording: () -> Void
     let onDismiss: () -> Void
+
+    private var headerText: String {
+        if let appName = appName {
+            return "Meeting detected in \(appName)"
+        } else {
+            return "Meeting detected"
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -127,9 +137,10 @@ private struct MeetingPromptView: View {
                     .fill(Color.white)
                     .frame(width: 16, height: 16)
 
-                Text("Meeting detected")
+                Text(headerText)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
+                    .lineLimit(1)
 
                 Spacer()
 
@@ -144,12 +155,6 @@ private struct MeetingPromptView: View {
                 .background(Color.white.opacity(0.1))
                 .clipShape(Circle())
             }
-
-            // Meeting title
-            Text(meetingTitle)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.9))
-                .lineLimit(2)
 
             // Buttons
             HStack(spacing: 10) {

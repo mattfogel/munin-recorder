@@ -1,6 +1,7 @@
 import Foundation
 import CoreAudio
 import AudioToolbox
+import AppKit
 
 /// Monitors microphone activity via Core Audio property listeners
 final class MicActivityMonitor: @unchecked Sendable {
@@ -175,6 +176,35 @@ final class MicActivityMonitor: @unchecked Sendable {
         )
 
         return status == noErr && isRunning != 0
+    }
+
+    /// Detects which running app is likely using the microphone
+    /// Only returns app name if frontmost is a known conferencing/browser app (high confidence)
+    func detectMicUsingApp() -> String? {
+        let knownApps: Set<String> = [
+            "zoom.us", "Zoom",
+            "Microsoft Teams", "Teams",
+            "Webex", "Cisco Webex Meetings",
+            "Slack",
+            "Discord",
+            "FaceTime",
+            "Skype",
+            "Google Chrome", "Chrome",
+            "Safari",
+            "Firefox",
+            "Arc",
+            "Brave Browser",
+            "Microsoft Edge"
+        ]
+
+        // Only return app name if frontmost - don't guess
+        if let frontmost = NSWorkspace.shared.frontmostApplication,
+           let name = frontmost.localizedName,
+           knownApps.contains(name) {
+            return name
+        }
+
+        return nil  // Shows generic "Meeting detected"
     }
 
     fileprivate func handleDefaultDeviceChanged() {

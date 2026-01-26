@@ -40,7 +40,7 @@ final class RecordingIndicatorWindow: NSPanel {
         // Visual style
         backgroundColor = .clear
         isOpaque = false
-        hasShadow = true
+        hasShadow = false
         titlebarAppearsTransparent = true
         titleVisibility = .hidden
 
@@ -175,6 +175,7 @@ private struct RecordingIndicatorView: View {
                 .fill(Color(nsColor: NSColor.windowBackgroundColor).opacity(0.95))
                 .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 4)
         )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .onAppear {
             startTimer()
         }
