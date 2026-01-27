@@ -54,7 +54,7 @@ final class CalendarAutoStartService: ObservableObject {
         guard isEnabled else { return }
         stopPolling()
 
-        print("Munin: CalendarAutoStartService starting polling (lead time: \(leadTimeMinutes) min)")
+        debugLog("CalendarAutoStartService starting polling (lead time: \(leadTimeMinutes) min)")
 
         // Poll every 30 seconds
         pollingTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
@@ -133,12 +133,12 @@ final class CalendarAutoStartService: ObservableObject {
 
     private func showUpcomingMeetingNotification(event: EKEvent, timeUntilStart: TimeInterval) {
         guard let appState = appState else {
-            print("Munin: CalendarAutoStartService not configured with AppState")
+            debugLog("CalendarAutoStartService not configured with AppState")
             return
         }
 
         let minutes = Int(ceil(timeUntilStart / 60))
-        print("Munin: Showing notification for upcoming meeting: \(event.title ?? "Untitled")")
+        debugLog("Showing notification for upcoming meeting: \(event.title ?? "Untitled")")
 
         appState.notificationPanel.showMeetingReminder(
             event: event,

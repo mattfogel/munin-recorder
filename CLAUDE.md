@@ -24,10 +24,11 @@ MeetingDetectionService (mic activity monitoring)
     ↓
 MeetingPromptPanel (floating NSPanel prompt)
     ↓
-User triggers recording (or auto-detected)
+User triggers recording (or CalendarAutoStartService pre-meeting prompt)
     ↓
 AppState (state machine: idle → recording → processing)
     ├─ RecordingIndicatorWindow (mini floating window, hidden from screen share)
+    ├─ NotificationNubPanel (custom floating notifications)
     ↓
 AudioCaptureCoordinator
   ├─ SystemAudioCapture (Core Audio Taps + AVAudioEngine)
@@ -73,14 +74,18 @@ Output: ~/Meetings/DATE/TIME-name/
 | Module | Purpose |
 |--------|---------|
 | `/App/AppState.swift` | State machine, recording orchestration, audio levels |
+| `/App/DebugLog.swift` | `debugLog()` function, conditional on build config |
 | `/Audio/SystemAudioCapture.swift` | Core Audio Taps + mic via AVAudioEngine |
 | `/Audio/AudioMixer.swift` | Real-time stereo mixing, RMS level monitoring (~15Hz) |
+| `/Views/MainAppWindow.swift` | Main app window with recording controls |
 | `/Views/MeetingPromptPanel.swift` | NSPanel floating prompt for meeting detection |
 | `/Views/RecordingIndicatorWindow.swift` | NSPanel mini-window, hidden from screen share |
+| `/Views/NotificationNubPanel.swift` | Custom floating notification panels |
 | `/Views/AudioLevelView.swift` | SwiftUI VU meter bars |
 | `/Services/MeetingDetectionService.swift` | Mic activity → prompt, UserDefaults persistence |
 | `/Services/MicActivityMonitor.swift` | Detects when any app uses microphone |
 | `/Services/CalendarService.swift` | EventKit integration for meeting names |
+| `/Services/CalendarAutoStartService.swift` | Pre-meeting notifications with join & record |
 | `/Processing/ProcessRunner.swift` | Async subprocess utility with timeout |
 | `/Processing/TranscriptionService.swift` | whisper.cpp wrapper |
 | `/Processing/SummarizationService.swift` | Claude CLI wrapper (non-fatal on failure) |
@@ -99,3 +104,12 @@ Output: ~/Meetings/DATE/TIME-name/
 - `.nonactivatingPanel` style — doesn't steal focus from other apps
 - `.floating` level — stays above normal windows
 - `sharingType = .none` on recording indicator — hidden from screen share
+
+## Debug Logging
+
+Use `debugLog("message")` instead of `print("Munin: message")` for debug output.
+
+- **Debug builds:** Always enabled
+- **Release builds:** Disabled by default, enable via `defaults write com.munin.app MuninDebug -bool true`
+
+Keep error-level prints (e.g., `print("Transcription error: \(error)")`) as raw `print()` statements — these should always appear.

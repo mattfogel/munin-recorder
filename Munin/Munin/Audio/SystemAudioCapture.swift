@@ -117,7 +117,7 @@ final class SystemAudioCapture: @unchecked Sendable {
     // MARK: - Audio Tap Setup
 
     private func setupAudioTap() async throws {
-        print("Munin: Setting up audio tap for global system audio capture")
+        debugLog("Setting up audio tap for global system audio capture")
 
         // Create tap description for global system audio (AudioTee pattern)
         // Empty processes array + isExclusive = true captures all system audio
@@ -137,17 +137,17 @@ final class SystemAudioCapture: @unchecked Sendable {
 
         let tapError = AudioHardwareCreateProcessTap(tapDescription, &tapID)
         guard tapError == noErr else {
-            print("Munin: Failed to create process tap, error: \(tapError) (\(fourCharCodeToString(tapError)))")
+            debugLog("Failed to create process tap, error: \(tapError) (\(fourCharCodeToString(tapError)))")
             throw AudioCaptureError.failedToCreateTap(tapError)
         }
 
-        print("Munin: Created process tap with ID: \(tapID)")
+        debugLog("Created process tap with ID: \(tapID)")
         self.tapID = tapID
 
         // Get the tap's stream format
         let tapFormat = try getTapStreamFormat(tapID: tapID)
         self.tapStreamFormat = tapFormat
-        print("Munin: Tap format - SR: \(tapFormat.mSampleRate), CH: \(tapFormat.mChannelsPerFrame), bits: \(tapFormat.mBitsPerChannel)")
+        debugLog("Tap format - SR: \(tapFormat.mSampleRate), CH: \(tapFormat.mChannelsPerFrame), bits: \(tapFormat.mBitsPerChannel)")
 
         // Create aggregate device following AudioTee pattern:
         // Create device WITHOUT subdevice list, then add tap via property
@@ -197,11 +197,11 @@ final class SystemAudioCapture: @unchecked Sendable {
         let status = AudioHardwareCreateAggregateDevice(description as CFDictionary, &aggregateID)
 
         guard status == noErr else {
-            print("Munin: Failed to create aggregate device, error: \(status) (\(fourCharCodeToString(status)))")
+            debugLog("Failed to create aggregate device, error: \(status) (\(fourCharCodeToString(status)))")
             throw AudioCaptureError.failedToCreateAggregateDevice(status)
         }
 
-        print("Munin: Created aggregate device with ID: \(aggregateID), output device: \(outputDeviceUID)")
+        debugLog("Created aggregate device with ID: \(aggregateID), output device: \(outputDeviceUID)")
         self.aggregateDeviceID = aggregateID
     }
 
@@ -213,7 +213,7 @@ final class SystemAudioCapture: @unchecked Sendable {
         try startMicrophoneCapture()
 
         isCapturing = true
-        print("Munin: Audio capture started (Core Audio Taps)")
+        debugLog("Audio capture started (Core Audio Taps)")
     }
 
     private func startSystemAudioCapture() throws {
@@ -248,7 +248,7 @@ final class SystemAudioCapture: @unchecked Sendable {
 
         var err = AudioDeviceCreateIOProcIDWithBlock(&procID, aggregateDeviceID, nil, ioBlock)
         guard err == noErr, let deviceProcID = procID else {
-            print("Munin: Failed to create IO proc, error: \(err)")
+            debugLog("Failed to create IO proc, error: \(err)")
             throw AudioCaptureError.failedToCreateIOProc(err)
         }
 
@@ -257,11 +257,11 @@ final class SystemAudioCapture: @unchecked Sendable {
         // Start the device
         err = AudioDeviceStart(aggregateDeviceID, deviceProcID)
         guard err == noErr else {
-            print("Munin: Failed to start device, error: \(err)")
+            debugLog("Failed to start device, error: \(err)")
             throw AudioCaptureError.failedToStartDevice(err)
         }
 
-        print("Munin: System audio capture started via IO proc")
+        debugLog("System audio capture started via IO proc")
     }
 
     private var systemAudioCallbackCount = 0
@@ -310,7 +310,7 @@ final class SystemAudioCapture: @unchecked Sendable {
         if Date().timeIntervalSince(lastSystemAudioLogTime) > 2.0 {
             lastSystemAudioLogTime = Date()
             let peak = floatSamples.map { abs($0) }.max() ?? 0
-            print("Munin: System audio - callbacks: \(systemAudioCallbackCount), frames: \(frameCount), peak: \(String(format: "%.4f", peak))")
+            debugLog("System audio - callbacks: \(systemAudioCallbackCount), frames: \(frameCount), peak: \(String(format: "%.4f", peak))")
         }
 
         // Create CMSampleBuffer with native format - AudioMixer handles resampling via AVAudioConverter
@@ -333,7 +333,7 @@ final class SystemAudioCapture: @unchecked Sendable {
 
         // Get hardware format info
         let hardwareFormat = inputNode.inputFormat(forBus: 0)
-        print("Munin: Microphone hardware format: \(hardwareFormat)")
+        debugLog("Microphone hardware format: \(hardwareFormat)")
 
         // Request float format at hardware sample rate (AudioMixer handles resampling)
         guard let floatFormat = AVAudioFormat(
@@ -348,7 +348,7 @@ final class SystemAudioCapture: @unchecked Sendable {
         }
 
         try engine.start()
-        print("Munin: Microphone capture started (float format)")
+        debugLog("Microphone capture started (float format)")
     }
 
     private func processMicrophoneBuffer(_ buffer: AVAudioPCMBuffer, time: AVAudioTime, converter: AVAudioConverter?) {
@@ -517,7 +517,7 @@ final class SystemAudioCapture: @unchecked Sendable {
             tapID = kAudioObjectUnknown
         }
 
-        print("Munin: Audio capture stopped")
+        debugLog("Audio capture stopped")
     }
 }
 

@@ -49,7 +49,7 @@ final class MicActivityMonitor: @unchecked Sendable {
         )
 
         isMonitoring = true
-        print("Munin: MicActivityMonitor started")
+        debugLog("MicActivityMonitor started")
     }
 
     private func teardownMonitoring() {
@@ -77,7 +77,7 @@ final class MicActivityMonitor: @unchecked Sendable {
 
         isMonitoring = false
         currentDeviceID = kAudioObjectUnknown
-        print("Munin: MicActivityMonitor stopped")
+        debugLog("MicActivityMonitor stopped")
     }
 
     private func updateDefaultInputDevice() {
@@ -104,7 +104,7 @@ final class MicActivityMonitor: @unchecked Sendable {
         )
 
         guard status == noErr, deviceID != kAudioObjectUnknown else {
-            print("Munin: Failed to get default input device")
+            debugLog("Failed to get default input device")
             return
         }
 
@@ -113,7 +113,7 @@ final class MicActivityMonitor: @unchecked Sendable {
 
         // Check current state
         let isActive = isMicCurrentlyActive()
-        print("Munin: Monitoring device \(deviceID), currently active: \(isActive)")
+        debugLog("Monitoring device \(deviceID), currently active: \(isActive)")
     }
 
     private func addDeviceListener() {
@@ -215,7 +215,7 @@ final class MicActivityMonitor: @unchecked Sendable {
 
     fileprivate func handleRunningStateChanged() {
         let isActive = isMicCurrentlyActive()
-        print("Munin: Mic activity changed: \(isActive)")
+        debugLog("Mic activity changed: \(isActive)")
         onMicActivityChanged?(isActive)
     }
 }

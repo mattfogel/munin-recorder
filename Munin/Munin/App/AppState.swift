@@ -47,23 +47,23 @@ final class AppState: ObservableObject {
             // Explicit event passed (from clicking upcoming meeting)
             currentMeetingName = calendarService.sanitizeForFilename(event.title ?? "unknown-meeting")
             currentParticipants = calendarService.getParticipantNames(event: event)
-            print("Munin: Using selected event: \(event.title ?? "untitled") with \(currentParticipants.count) participants")
+            debugLog("Using selected event: \(event.title ?? "untitled") with \(currentParticipants.count) participants")
         } else if let name = meetingName {
             currentMeetingName = name
         } else if let detectedEvent = calendarService.getCurrentEvent() {
             currentMeetingName = calendarService.sanitizeForFilename(detectedEvent.title ?? "unknown-meeting")
             currentParticipants = calendarService.getParticipantNames(event: detectedEvent)
-            print("Munin: Found calendar event: \(detectedEvent.title ?? "untitled") with \(currentParticipants.count) participants")
+            debugLog("Found calendar event: \(detectedEvent.title ?? "untitled") with \(currentParticipants.count) participants")
         } else {
             currentMeetingName = "unknown-meeting"
         }
 
-        print("Munin: Starting recording...")
+        debugLog("Starting recording...")
 
         let storage = MeetingStorage()
         let record = try storage.createMeetingFolder(name: currentMeetingName)
         currentMeetingRecord = record
-        print("Munin: Created folder at \(record.folderURL.path)")
+        debugLog("Created folder at \(record.folderURL.path)")
 
         audioCaptureCoordinator = AudioCaptureCoordinator()
 
@@ -76,7 +76,7 @@ final class AppState: ObservableObject {
 
         do {
             try await audioCaptureCoordinator?.startCapture(outputURL: record.audioURL)
-            print("Munin: Audio capture started successfully")
+            debugLog("Audio capture started successfully")
         } catch {
             lastError = error.localizedDescription
             print("Munin: Failed to start audio capture: \(error)")

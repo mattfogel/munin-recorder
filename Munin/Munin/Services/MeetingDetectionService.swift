@@ -55,12 +55,12 @@ final class MeetingDetectionService: ObservableObject {
 
     func startMonitoring() {
         updateMonitoringState()
-        print("Munin: Meeting detection enabled")
+        debugLog("Meeting detection enabled")
     }
 
     func stopMonitoring() {
         micMonitor.stopMonitoring()
-        print("Munin: Meeting detection disabled")
+        debugLog("Meeting detection disabled")
     }
 
     private func handleMicActivityChanged(_ isActive: Bool) {
@@ -69,13 +69,13 @@ final class MeetingDetectionService: ObservableObject {
 
         // Already recording?
         if appState?.state != .idle {
-            print("Munin: Mic active but already recording/processing, ignoring")
+            debugLog("Mic active but already recording/processing, ignoring")
             return
         }
 
         // In cooldown?
         if let cooldownUntil = cooldownUntil, Date() < cooldownUntil {
-            print("Munin: Mic active but in cooldown until \(cooldownUntil)")
+            debugLog("Mic active but in cooldown until \(cooldownUntil)")
             return
         }
 
@@ -102,7 +102,7 @@ final class MeetingDetectionService: ObservableObject {
             }
         )
 
-        print("Munin: Showing meeting detection prompt for app: \(appName ?? "unknown")")
+        debugLog("Showing meeting detection prompt for app: \(appName ?? "unknown")")
     }
 
     private func handleStartRecording() {
@@ -119,6 +119,6 @@ final class MeetingDetectionService: ObservableObject {
 
     private func startCooldown() {
         cooldownUntil = Date().addingTimeInterval(Self.cooldownDuration)
-        print("Munin: Meeting detection cooldown until \(cooldownUntil!)")
+        debugLog("Meeting detection cooldown until \(cooldownUntil!)")
     }
 }

@@ -10,8 +10,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainAppWindow: MainAppWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("Munin: applicationDidFinishLaunching")
-
         // Configure calendar auto-start service with AppState for notification actions
         calendarAutoStartService.configure(appState: appState)
 

@@ -13,9 +13,11 @@ Records system audio + microphone, transcribes locally with whisper.cpp, and sum
 - Audio capture (system + mic) with real-time level monitoring
 - Recording indicator mini-window (hidden from screen share)
 - Auto-detect meetings via mic activity with floating prompt
+- Calendar auto-start: notifies before scheduled meetings with option to join & record
+- Custom floating notification panels (not system notifications)
 - Transcription via whisper.cpp
 - Summarization via Claude CLI
-- Calendar integration for meeting names
+- Calendar integration for meeting names and participants
 
 ## Architecture
 
@@ -128,20 +130,25 @@ Munin/
 ├── App/
 │   ├── MuninApp.swift           # @main entry, MenuBarExtra
 │   ├── AppDelegate.swift        # Permission checks, app lifecycle
-│   └── AppState.swift           # Recording state machine
+│   ├── AppState.swift           # Recording state machine
+│   └── DebugLog.swift           # Conditional debug logging
 ├── Views/
+│   ├── MainAppWindow.swift          # Main app window UI
 │   ├── MeetingPromptPanel.swift     # Floating meeting detection prompt
 │   ├── RecordingIndicatorWindow.swift # Mini recording status window
-│   └── AudioLevelView.swift         # VU meter bars
+│   ├── NotificationNubPanel.swift   # Custom floating notifications
+│   ├── AudioLevelView.swift         # VU meter bars
+│   └── MuninIcon.swift              # Raven icon rendering
 ├── Audio/
 │   ├── AudioCaptureCoordinator.swift
 │   ├── SystemAudioCapture.swift # Core Audio Taps
 │   ├── AudioMixer.swift         # Real-time mixing + level monitoring
 │   └── AudioFileWriter.swift    # AVAssetWriter
 ├── Services/
-│   ├── MeetingDetectionService.swift # Mic activity monitoring
-│   ├── MicActivityMonitor.swift      # Low-level mic detection
-│   └── CalendarService.swift         # EventKit integration
+│   ├── MeetingDetectionService.swift  # Mic activity monitoring
+│   ├── MicActivityMonitor.swift       # Low-level mic detection
+│   ├── CalendarService.swift          # EventKit integration
+│   └── CalendarAutoStartService.swift # Pre-meeting notifications
 ├── Processing/
 │   ├── ProcessRunner.swift      # Async subprocess wrapper
 │   ├── TranscriptionService.swift
@@ -155,15 +162,6 @@ Munin/
 ```
 
 ## Roadmap
-
-### Phase 7: Calendar Auto-Start
-**Goal:** Offer to begin recording automatically before scheduled meetings
-
-- [ ] Background timer checking upcoming events
-- [ ] Configurable lead time (e.g., 2 minutes before)
-- [ ] Notification offering to Start event and recording (use the event link in the invite to start the event!)
-- [ ] Notification that recording started
-- [ ] Preference to enable/disable
 
 ### Future Enhancements
 - Smart meeting detection (Accessibility APIs to detect Zoom's "Meeting" menu, Teams windows)
@@ -179,6 +177,20 @@ Munin/
 
 
 ## Troubleshooting
+
+### Debug Logging
+
+Debug logs are **always enabled** in Debug builds (Cmd+R in Xcode).
+
+In Release builds, logs are disabled by default. Enable them with:
+```bash
+defaults write com.munin.app MuninDebug -bool true
+```
+
+Disable with:
+```bash
+defaults delete com.munin.app MuninDebug
+```
 
 ### Menubar icon not appearing
 Use proper code signing, not "Sign to Run Locally".
