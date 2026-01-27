@@ -1,6 +1,6 @@
 import Foundation
 import EventKit
-import UserNotifications
+import AppKit
 
 /// Service that monitors calendar and offers to auto-start recording before scheduled meetings
 @MainActor
@@ -34,6 +34,7 @@ final class CalendarAutoStartService: ObservableObject {
     private var notifiedEventIDs: Set<String> = []
     private var lastMidnightClear: Date?
     private var pendingEvent: EKEvent?
+    private weak var appState: AppState?
 
     private let calendarService = CalendarService.shared
 
@@ -43,6 +44,11 @@ final class CalendarAutoStartService: ObservableObject {
     }
 
     // MARK: - Public API
+
+    /// Configure with AppState reference for notification actions
+    func configure(appState: AppState) {
+        self.appState = appState
+    }
 
     func startPolling() {
         guard isEnabled else { return }
@@ -126,30 +132,54 @@ final class CalendarAutoStartService: ObservableObject {
     // MARK: - Notifications
 
     private func showUpcomingMeetingNotification(event: EKEvent, timeUntilStart: TimeInterval) {
-        let content = UNMutableNotificationContent()
-        content.title = "Meeting Starting Soon"
+        guard let appState = appState else {
+            print("Munin: CalendarAutoStartService not configured with AppState")
+            return
+        }
 
         let minutes = Int(ceil(timeUntilStart / 60))
-        let timeText = minutes == 1 ? "1 minute" : "\(minutes) minutes"
-        content.body = "\(event.title ?? "Untitled") starts in \(timeText)"
-        content.sound = .default
-        content.categoryIdentifier = "MEETING_REMINDER"
+        print("Munin: Showing notification for upcoming meeting: \(event.title ?? "Untitled")")
 
-        // Store event ID in userInfo for action handling
-        content.userInfo = ["eventID": event.eventIdentifier ?? ""]
-
-        let request = UNNotificationRequest(
-            identifier: "meeting-\(event.eventIdentifier ?? UUID().uuidString)",
-            content: content,
-            trigger: nil
-        )
-
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Munin: Failed to show meeting notification: \(error)")
-            } else {
-                print("Munin: Showed notification for upcoming meeting: \(event.title ?? "Untitled")")
+        appState.notificationPanel.showMeetingReminder(
+            event: event,
+            minutesUntilStart: minutes,
+            onStartRecording: { [weak self] in
+                Task { @MainActor in
+                    self?.handleStartRecording(event: event)
+                }
+            },
+            onJoinAndRecord: { [weak self] in
+                Task { @MainActor in
+                    self?.handleJoinAndRecord(event: event)
+                }
+            },
+            onDismiss: { [weak self] in
+                self?.clearPendingEvent()
             }
+        )
+    }
+
+    // MARK: - Action Handlers
+
+    private func handleStartRecording(event: EKEvent) {
+        guard let appState = appState else { return }
+        clearPendingEvent()
+        Task {
+            try? await appState.startRecording(event: event)
+        }
+    }
+
+    private func handleJoinAndRecord(event: EKEvent) {
+        guard let appState = appState else { return }
+
+        // Open meeting link if available
+        if let meetingURL = calendarService.getMeetingLink(event: event) {
+            NSWorkspace.shared.open(meetingURL)
+        }
+
+        clearPendingEvent()
+        Task {
+            try? await appState.startRecording(event: event)
         }
     }
 }

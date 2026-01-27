@@ -63,11 +63,18 @@ final class SummarizationService {
         let promptData = Data(prompt.utf8)
 
         // Run claude CLI with the prompt via stdin to avoid command-line length limits.
+        // Optimization flags: skip session persistence, slash commands, and MCP servers for faster startup
         let result: ProcessRunner.Result
         do {
             result = try await ProcessRunner.run(
                 executablePath: claudePath,
-                arguments: ["-p", "--model", "sonnet"],
+                arguments: [
+                    "-p",
+                    "--model", "sonnet",
+                    "--no-session-persistence",
+                    "--disable-slash-commands",
+                    "--strict-mcp-config"
+                ],
                 stdinData: promptData,
                 timeout: 300 // 5 minutes for long transcripts
             )
@@ -82,7 +89,14 @@ final class SummarizationService {
             do {
                 finalResult = try await ProcessRunner.run(
                     executablePath: claudePath,
-                    arguments: ["-p", "--model", "sonnet", prompt],
+                    arguments: [
+                        "-p",
+                        "--model", "sonnet",
+                        "--no-session-persistence",
+                        "--disable-slash-commands",
+                        "--strict-mcp-config",
+                        prompt
+                    ],
                     timeout: 300
                 )
             } catch ProcessRunner.ProcessError.timeout {

@@ -1,5 +1,5 @@
 import Foundation
-import UserNotifications
+import AppKit
 import EventKit
 
 @MainActor
@@ -27,6 +27,7 @@ final class AppState: ObservableObject {
     private var currentParticipants: [String] = []
     private let calendarService = CalendarService.shared
     private var recordingIndicatorWindow: RecordingIndicatorWindow?
+    let notificationPanel = NotificationNubPanel()
 
     var recordingDuration: TimeInterval {
         guard let startTime = recordingStartTime else { return 0 }
@@ -93,18 +94,8 @@ final class AppState: ObservableObject {
     }
 
     private func showRecordingStartedNotification() {
-        let content = UNMutableNotificationContent()
-        content.title = "Recording Started"
-        content.body = currentMeetingName == "unknown-meeting" ? "Recording in progress" : currentMeetingName
-        content.sound = nil // Silent - indicator window is enough
-
-        let request = UNNotificationRequest(
-            identifier: "recording-started-\(UUID().uuidString)",
-            content: content,
-            trigger: nil
-        )
-
-        UNUserNotificationCenter.current().add(request)
+        let subtitle = currentMeetingName == "unknown-meeting" ? "Recording in progress" : currentMeetingName
+        notificationPanel.showInfo(title: "Recording Started", subtitle: subtitle)
     }
 
     private func showRecordingIndicator() {
@@ -176,22 +167,21 @@ final class AppState: ObservableObject {
     }
 
     private func showCompletionNotification(record: MeetingRecord, error: String?) {
-        let content = UNMutableNotificationContent()
         if let error = error {
-            content.title = "Processing Failed"
-            content.body = error
+            notificationPanel.showStatus(
+                title: "Processing Failed",
+                subtitle: error,
+                isError: true
+            )
         } else {
-            content.title = "Meeting Processed"
-            content.body = "Recording saved to \(record.folderURL.lastPathComponent)"
+            notificationPanel.showStatus(
+                title: "Meeting Processed",
+                subtitle: record.folderURL.lastPathComponent,
+                isError: false,
+                onTap: {
+                    NSWorkspace.shared.open(record.folderURL)
+                }
+            )
         }
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
-        )
-
-        UNUserNotificationCenter.current().add(request)
     }
 }
