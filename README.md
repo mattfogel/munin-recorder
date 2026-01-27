@@ -174,6 +174,7 @@ Munin/
 - Preferences window (storage location, whisper model, etc.)
 - Global hotkey (Cmd+Shift+R)
 - Real-time transcription display
+- Switch to Apple SpeechAnalyzer API (macOS 26+) for faster streaming transcription
 
 
 
