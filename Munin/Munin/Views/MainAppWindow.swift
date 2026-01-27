@@ -7,17 +7,9 @@ import EventKit
 final class MainAppWindow: NSWindow {
     private var hostingView: NSHostingView<MainAppWindowContent>?
     private weak var appState: AppState?
-    private weak var meetingDetection: MeetingDetectionService?
-    private weak var calendarAutoStart: CalendarAutoStartService?
 
-    init(
-        appState: AppState,
-        meetingDetection: MeetingDetectionService,
-        calendarAutoStart: CalendarAutoStartService
-    ) {
+    init(appState: AppState) {
         self.appState = appState
-        self.meetingDetection = meetingDetection
-        self.calendarAutoStart = calendarAutoStart
 
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 280, height: 200),
@@ -51,15 +43,9 @@ final class MainAppWindow: NSWindow {
     }
 
     private func setupContent() {
-        guard let appState = appState,
-              let meetingDetection = meetingDetection,
-              let calendarAutoStart = calendarAutoStart else { return }
+        guard let appState = appState else { return }
 
-        let contentView = MainAppWindowContent(
-            appState: appState,
-            meetingDetection: meetingDetection,
-            calendarAutoStart: calendarAutoStart
-        )
+        let contentView = MainAppWindowContent(appState: appState)
 
         hostingView = NSHostingView(rootView: contentView)
         hostingView?.translatesAutoresizingMaskIntoConstraints = false
@@ -76,107 +62,32 @@ final class MainAppWindow: NSWindow {
 
 struct MainAppWindowContent: View {
     @ObservedObject var appState: AppState
-    @ObservedObject var meetingDetection: MeetingDetectionService
-    @ObservedObject var calendarAutoStart: CalendarAutoStartService
-    @State private var showingSettings = false
 
     private var upcomingEvents: [EKEvent] {
         CalendarService.shared.getUpcomingEvents(limit: 3)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            headerView
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+        VStack(spacing: 16) {
+            // Status
+            statusView
 
-            Divider()
-                .opacity(0.3)
-
-            // Content
-            VStack(spacing: 16) {
-                // Status
-                statusView
-
-                // Upcoming meetings (hidden if empty)
-                if appState.state == .idle && !upcomingEvents.isEmpty {
-                    upcomingMeetingsView
-                }
-
-                // Start Recording button
-                if appState.state == .idle {
-                    startRecordingButton
-                } else if appState.state == .recording {
-                    stopRecordingButton
-                }
+            // Upcoming meetings (hidden if empty)
+            if appState.state == .idle && !upcomingEvents.isEmpty {
+                upcomingMeetingsView
             }
-            .padding(16)
-        }
-        .frame(width: 280)
-        .frame(minHeight: 160)
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
 
-    // MARK: - Header
-
-    private var headerView: some View {
-        HStack(spacing: 10) {
-            MuninIcon()
-                .fill(Color.white)
-                .frame(width: 18, height: 18)
-
-            Text("Munin")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-
-            Spacer()
-
-            // Settings gear
-            Button(action: { showingSettings.toggle() }) {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showingSettings, arrowEdge: .bottom) {
-                settingsPopover
-            }
-        }
-    }
-
-    // MARK: - Settings Popover
-
-    private var settingsPopover: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Settings")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.secondary)
-
-            Toggle("Auto-detect Meetings", isOn: $meetingDetection.isEnabled)
-                .font(.system(size: 13))
-
-            Toggle("Calendar Auto-Start", isOn: $calendarAutoStart.isEnabled)
-                .font(.system(size: 13))
-
-            if calendarAutoStart.isEnabled {
-                HStack {
-                    Text("Start")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                    Stepper(
-                        "\(calendarAutoStart.leadTimeMinutes) min before",
-                        value: $calendarAutoStart.leadTimeMinutes,
-                        in: 1...10
-                    )
-                    .font(.system(size: 12))
-                }
-                .padding(.leading, 20)
+            // Start Recording button
+            if appState.state == .idle {
+                startRecordingButton
+            } else if appState.state == .recording {
+                stopRecordingButton
             }
         }
         .padding(16)
-        .frame(width: 240)
+        .frame(width: 280)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     // MARK: - Status
@@ -261,6 +172,7 @@ struct MainAppWindowContent: View {
         .background(Color.red)
         .foregroundColor(.white)
         .cornerRadius(8)
+        .pointerOnHover()
     }
 
     private var stopRecordingButton: some View {
@@ -280,6 +192,7 @@ struct MainAppWindowContent: View {
         .background(Color.red.opacity(0.8))
         .foregroundColor(.white)
         .cornerRadius(8)
+        .pointerOnHover()
     }
 
     // MARK: - Actions
@@ -338,5 +251,20 @@ private struct MeetingRowButton: View {
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
+        .pointerOnHover()
+    }
+}
+
+// MARK: - Pointer Cursor Modifier
+
+private extension View {
+    func pointerOnHover() -> some View {
+        self.onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }

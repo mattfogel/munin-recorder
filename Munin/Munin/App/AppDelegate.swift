@@ -28,11 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupMainAppWindow() {
-        mainAppWindow = MainAppWindow(
-            appState: appState,
-            meetingDetection: meetingDetectionService,
-            calendarAutoStart: calendarAutoStartService
-        )
+        mainAppWindow = MainAppWindow(appState: appState)
         mainAppWindow?.showWindow()
     }
 
