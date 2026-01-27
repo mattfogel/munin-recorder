@@ -20,9 +20,9 @@ final class NotificationNubPanel: NSPanel {
     }
 
     private func configure() {
-        // Window behavior - assistive tech level to appear above all windows
-        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.assistiveTechHighWindow)))
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        // Window behavior - use maximum level to ensure we're above time-sensitive notifications
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle, .transient]
         isFloatingPanel = true
         becomesKeyOnlyIfNeeded = true
         hidesOnDeactivate = false
@@ -139,6 +139,7 @@ final class NotificationNubPanel: NSPanel {
         // Fade in (200ms)
         alphaValue = 0
         orderFrontRegardless()
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
             self.animator().alphaValue = 1

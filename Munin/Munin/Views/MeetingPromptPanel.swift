@@ -20,10 +20,9 @@ final class MeetingPromptPanel: NSPanel {
     }
 
     private func configure() {
-        // Window behavior
-        // Use assistive tech level - designed for windows that must appear above all
-        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.assistiveTechHighWindow)))
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        // Window behavior - use maximum level to ensure we're above time-sensitive notifications
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle, .transient]
         isFloatingPanel = true
         becomesKeyOnlyIfNeeded = true
         hidesOnDeactivate = false
@@ -74,6 +73,7 @@ final class MeetingPromptPanel: NSPanel {
         // Show with animation
         alphaValue = 0
         orderFrontRegardless()
+        level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
             self.animator().alphaValue = 1
