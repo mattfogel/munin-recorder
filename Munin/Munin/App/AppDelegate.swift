@@ -7,11 +7,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var meetingDetectionService = MeetingDetectionService(appState: appState)
     private(set) lazy var calendarAutoStartService = CalendarAutoStartService.shared
 
+    private var mainAppWindow: MainAppWindow?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("Munin: applicationDidFinishLaunching")
 
         // Configure calendar auto-start service with AppState for notification actions
         calendarAutoStartService.configure(appState: appState)
+
+        // Create and show the main app window
+        setupMainAppWindow()
 
         Task {
             await checkPermissionsOnLaunch()
@@ -20,6 +25,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Start calendar auto-start polling if enabled
             calendarAutoStartService.startPolling()
         }
+    }
+
+    private func setupMainAppWindow() {
+        mainAppWindow = MainAppWindow(appState: appState)
+        mainAppWindow?.showWindow()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // Show main window when dock icon is clicked
+        if !flag {
+            mainAppWindow?.showWindow()
+        }
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
