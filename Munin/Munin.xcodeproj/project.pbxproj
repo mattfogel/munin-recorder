@@ -32,6 +32,7 @@
 		A10000010000000000000028 /* MuninIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000028 /* MuninIcon.swift */; };
 		A10000010000000000000029 /* CalendarAutoStartService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000029 /* CalendarAutoStartService.swift */; };
 		C9AC700F2F28EE8400DA6056 /* NotificationNubPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9AC700E2F28EE8300DA6056 /* NotificationNubPanel.swift */; };
+		C9AC70112F2902A700DA6056 /* MainAppWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9AC70102F2902A600DA6056 /* MainAppWindow.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -63,6 +64,7 @@
 		A20000010000000000000028 /* MuninIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuninIcon.swift; sourceTree = "<group>"; };
 		A20000010000000000000029 /* CalendarAutoStartService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAutoStartService.swift; sourceTree = "<group>"; };
 		C9AC700E2F28EE8300DA6056 /* NotificationNubPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationNubPanel.swift; sourceTree = "<group>"; };
+		C9AC70102F2902A600DA6056 /* MainAppWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainAppWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -182,6 +184,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000010000000000000025 /* MeetingPromptPanel.swift */,
+				C9AC70102F2902A600DA6056 /* MainAppWindow.swift */,
 				A20000010000000000000026 /* AudioLevelView.swift */,
 				A20000010000000000000027 /* RecordingIndicatorWindow.swift */,
 				A20000010000000000000028 /* MuninIcon.swift */,
@@ -275,6 +278,7 @@
 				A1000001000000000000000F /* PermissionChecker.swift in Sources */,
 				A10000010000000000000010 /* PermissionPrompts.swift in Sources */,
 				A10000010000000000000022 /* CalendarService.swift in Sources */,
+				C9AC70112F2902A700DA6056 /* MainAppWindow.swift in Sources */,
 				A10000010000000000000023 /* MicActivityMonitor.swift in Sources */,
 				C9AC700F2F28EE8400DA6056 /* NotificationNubPanel.swift in Sources */,
 				A10000010000000000000024 /* MeetingDetectionService.swift in Sources */,
