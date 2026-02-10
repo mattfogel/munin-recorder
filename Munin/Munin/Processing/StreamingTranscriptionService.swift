@@ -83,20 +83,19 @@ final class StreamingTranscriptionService: @unchecked Sendable {
         return installed.contains(locale)
     }
 
-    /// Download the speech recognition model if not already installed.
-    /// Returns true if model is ready (already installed or download succeeded).
-    static func ensureModelAvailable(locale: Locale = .current) async throws -> Bool {
-        let installed = await SpeechTranscriber.installedLocales
-        if installed.contains(locale) {
-            return true
-        }
-
+    /// Ensure the speech recognition model is downloaded and allocated for the given locale.
+    /// Must be called before starting an analyzer.
+    static func ensureModelAvailable(locale: Locale = .current) async throws {
         let supported = await SpeechTranscriber.supportedLocales
         guard supported.contains(locale) else {
+            debugLog("Locale \(locale.identifier) not in supported locales: \(supported.map { $0.identifier })")
             throw TranscriptionError.localeNotSupported
         }
 
-        // Create a temporary transcriber to trigger model download
+        let installed = await SpeechTranscriber.installedLocales
+        debugLog("Speech model status — supported: \(supported.count) locales, installed: \(installed.map { $0.identifier })")
+
+        // Create a transcriber to check allocation/trigger download
         let tempTranscriber = SpeechTranscriber(
             locale: locale,
             transcriptionOptions: [],
@@ -105,16 +104,22 @@ final class StreamingTranscriptionService: @unchecked Sendable {
         )
 
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [tempTranscriber]) {
+            debugLog("Downloading speech model for \(locale.identifier)...")
             try await request.downloadAndInstall()
+            debugLog("Speech model download complete for \(locale.identifier)")
+        } else {
+            debugLog("Speech model already available for \(locale.identifier)")
         }
-
-        return true
     }
 
     /// Start the analyzer and begin accepting audio samples.
     /// Call feedSamples() to provide audio data, then finalize() when recording stops.
     func start(transcriptURL: URL? = nil) async throws {
         self.transcriptURL = transcriptURL
+
+        // Ensure model is downloaded and allocated before creating the analyzer
+        debugLog("[\(speaker)] Ensuring speech model available for \(locale.identifier)...")
+        try await Self.ensureModelAvailable(locale: locale)
 
         let newTranscriber = SpeechTranscriber(
             locale: locale,
@@ -128,10 +133,14 @@ final class StreamingTranscriptionService: @unchecked Sendable {
         // Get the best audio format for the analyzer
         let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [newTranscriber])
         analyzerFormat = format
+        debugLog("[\(speaker)] Analyzer format: \(format?.description ?? "nil")")
 
         // Create converter from 48kHz mono float32 → analyzer format
         if let format, sourceFormat != format {
             audioConverter = AVAudioConverter(from: sourceFormat, to: format)
+            debugLog("[\(speaker)] Created audio converter: \(sourceFormat.sampleRate)Hz -> \(format.sampleRate)Hz")
+        } else {
+            debugLog("[\(speaker)] No audio conversion needed")
         }
 
         // Create the input stream
@@ -143,10 +152,12 @@ final class StreamingTranscriptionService: @unchecked Sendable {
         // Start consuming results in background
         resultTask = Task { [weak self] in
             guard let self else { return }
+            debugLog("[\(self.speaker)] Result stream started")
             do {
                 for try await result in newTranscriber.results {
                     self.handleResult(result)
                 }
+                debugLog("[\(self.speaker)] Result stream ended normally")
             } catch {
                 debugLog("[\(self.speaker)] Result stream error: \(error)")
             }
@@ -155,9 +166,11 @@ final class StreamingTranscriptionService: @unchecked Sendable {
         // Start the analyzer with input sequence
         do {
             try await newAnalyzer.start(inputSequence: inputSequence)
+            debugLog("[\(speaker)] Analyzer started successfully")
         } catch {
             inputContinuation?.finish()
             resultTask?.cancel()
+            debugLog("[\(speaker)] Analyzer start failed: \(error)")
             throw TranscriptionError.analyzerStartFailed(error)
         }
     }
@@ -210,9 +223,12 @@ final class StreamingTranscriptionService: @unchecked Sendable {
     /// Finalize transcription after recording stops.
     /// Waits for remaining results up to the timeout.
     func finalize(timeout: TimeInterval = 30) async -> [TranscriptSegment] {
+        debugLog("[\(speaker)] Finalizing transcription...")
+
         // Signal end of input
         do {
             try await analyzer?.finalizeAndFinishThroughEndOfInput()
+            debugLog("[\(speaker)] Analyzer finalized successfully")
         } catch {
             debugLog("[\(speaker)] Finalization error: \(error)")
         }
@@ -240,7 +256,9 @@ final class StreamingTranscriptionService: @unchecked Sendable {
         // Flush final segments to disk
         flushToDisk(force: true)
 
-        return copyFinalSegments()
+        let segments = copyFinalSegments()
+        debugLog("[\(speaker)] Finalization complete: \(segments.count) final segments")
+        return segments
     }
 
     /// Cancel transcription immediately without waiting for remaining results
@@ -265,6 +283,7 @@ final class StreamingTranscriptionService: @unchecked Sendable {
     private func handleResult(_ result: SpeechTranscriber.Result) {
         let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        debugLog("[\(speaker)] \(result.isFinal ? "FINAL" : "volatile"): \(text.prefix(80))")
 
         // Extract timestamp from the first run's audioTimeRange
         var startMs = 0

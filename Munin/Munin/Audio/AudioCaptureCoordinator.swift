@@ -80,9 +80,11 @@ final class AudioCaptureCoordinator {
         // Finalize both transcribers and merge results
         var transcript: String? = nil
         if let mic = micTranscriber, let system = systemTranscriber {
+            debugLog("Finalizing both transcribers...")
             async let micSegments = mic.finalize()
             async let systemSegments = system.finalize()
             let (micResult, systemResult) = await (micSegments, systemSegments)
+            debugLog("Transcription results — mic: \(micResult.count) segments, system: \(systemResult.count) segments")
 
             if !micResult.isEmpty || !systemResult.isEmpty {
                 transcript = StreamingTranscriptionService.formatDiarizedTranscript(
@@ -90,6 +92,9 @@ final class AudioCaptureCoordinator {
                     systemSegments: systemResult,
                     participants: participants
                 )
+                debugLog("Merged transcript: \(transcript?.count ?? 0) characters")
+            } else {
+                debugLog("No transcript segments from either channel")
             }
         }
 
