@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import EventKit
+import Speech
 
 final class PermissionChecker {
 
@@ -31,18 +32,34 @@ final class PermissionChecker {
         }
     }
 
+    /// Checks if speech recognition permission is granted
+    func hasSpeechRecognitionPermission() -> Bool {
+        SFSpeechRecognizer.authorizationStatus() == .authorized
+    }
+
+    /// Requests speech recognition permission
+    func requestSpeechRecognitionPermission() async -> Bool {
+        await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status == .authorized)
+            }
+        }
+    }
+
     /// Checks all required permissions
     func checkAllPermissions() async -> PermissionStatus {
         let microphone = hasMicrophonePermission()
         let calendar = hasCalendarPermission()
+        let speechRecognition = hasSpeechRecognitionPermission()
 
-        return PermissionStatus(microphone: microphone, calendar: calendar)
+        return PermissionStatus(microphone: microphone, calendar: calendar, speechRecognition: speechRecognition)
     }
 }
 
 struct PermissionStatus {
     let microphone: Bool
     let calendar: Bool
+    let speechRecognition: Bool
 
     var canRecord: Bool {
         // Microphone permission is required for recording
@@ -50,7 +67,11 @@ struct PermissionStatus {
         microphone
     }
 
+    var canTranscribe: Bool {
+        speechRecognition
+    }
+
     var allGranted: Bool {
-        microphone && calendar
+        microphone && calendar && speechRecognition
     }
 }

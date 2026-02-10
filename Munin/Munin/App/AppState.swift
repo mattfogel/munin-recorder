@@ -11,7 +11,7 @@ final class AppState: ObservableObject {
 
         enum ProcessingPhase: Equatable {
             case saving
-            case transcribing
+            case finalizing
             case summarizing
         }
     }
@@ -75,8 +75,11 @@ final class AppState: ObservableObject {
         }
 
         do {
-            try await audioCaptureCoordinator?.startCapture(outputURL: record.audioURL)
-            debugLog("Audio capture started successfully")
+            try await audioCaptureCoordinator?.startCapture(
+                outputURL: record.audioURL,
+                transcriptURL: record.transcriptURL
+            )
+            debugLog("Audio capture and streaming transcription started successfully")
         } catch {
             lastError = error.localizedDescription
             print("Munin: Failed to start audio capture: \(error)")
@@ -119,44 +122,45 @@ final class AppState: ObservableObject {
         state = .processing(.saving)
         lastError = nil
 
-        await audioCaptureCoordinator?.stopCapture()
+        // Finalize streaming transcription and stop capture
+        state = .processing(.finalizing)
+        let transcript = await audioCaptureCoordinator?.stopCapture(participants: currentParticipants)
         audioCaptureCoordinator = nil
 
-        if let record = currentMeetingRecord {
-            lastRecordingURL = record.folderURL
-            await processRecording(record: record)
-        }
-
-        recordingStartTime = nil
-        currentMeetingRecord = nil
-        currentParticipants = []
-        state = .idle
-    }
-
-    private func processRecording(record: MeetingRecord) async {
-        // Phase 2: Transcription
-        state = .processing(.transcribing)
-        let transcriptionService = TranscriptionService()
-        let transcriptURL = record.transcriptURL
-
-        do {
-            try await transcriptionService.transcribe(
-                audioURL: record.audioURL,
-                outputURL: transcriptURL,
-                participants: currentParticipants
-            )
-        } catch {
-            print("Transcription error: \(error)")
-            lastError = error.localizedDescription
-            showCompletionNotification(record: record, error: "Transcription failed")
+        guard let record = currentMeetingRecord else {
+            recordingStartTime = nil
+            currentMeetingRecord = nil
+            currentParticipants = []
+            state = .idle
             return
         }
 
-        // Phase 3: Summarization
+        lastRecordingURL = record.folderURL
+
+        // Write finalized transcript to disk
+        if let transcript, !transcript.isEmpty {
+            do {
+                try transcript.write(to: record.transcriptURL, atomically: true, encoding: .utf8)
+                debugLog("Transcript written to \(record.transcriptURL.path)")
+            } catch {
+                print("Transcript write error: \(error)")
+                lastError = "Failed to save transcript"
+                showCompletionNotification(record: record, error: "Transcript write failed")
+                resetRecordingState()
+                return
+            }
+        } else {
+            // No speech detected
+            let emptyTranscript = "# Transcript\n\n*[No speech detected]*"
+            try? emptyTranscript.write(to: record.transcriptURL, atomically: true, encoding: .utf8)
+            debugLog("No speech detected during recording")
+        }
+
+        // Summarization
         state = .processing(.summarizing)
         let summarizationService = SummarizationService()
         do {
-            try await summarizationService.summarize(transcriptURL: transcriptURL, outputURL: record.summaryURL)
+            try await summarizationService.summarize(transcriptURL: record.transcriptURL, outputURL: record.summaryURL)
         } catch {
             print("Summarization error: \(error)")
             // Non-fatal - transcript is still saved
@@ -164,6 +168,14 @@ final class AppState: ObservableObject {
         }
 
         showCompletionNotification(record: record, error: nil)
+        resetRecordingState()
+    }
+
+    private func resetRecordingState() {
+        recordingStartTime = nil
+        currentMeetingRecord = nil
+        currentParticipants = []
+        state = .idle
     }
 
     private func showCompletionNotification(record: MeetingRecord, error: String?) {
