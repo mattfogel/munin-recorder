@@ -242,14 +242,17 @@ final class StreamingTranscriptionService: @unchecked Sendable {
     func finalize(timeout: TimeInterval = 30) async -> [TranscriptSegment] {
         debugLog("[\(speaker)] Finalizing transcription...")
 
-        // Signal end of input
+        // Finish the input stream first — the analyzer can't finalize while waiting for more input
+        inputContinuation?.finish()
+        inputContinuation = nil
+
+        // Now tell the analyzer to process remaining buffered audio and finish
         do {
             try await analyzer?.finalizeAndFinishThroughEndOfInput()
             debugLog("[\(speaker)] Analyzer finalized successfully")
         } catch {
             debugLog("[\(speaker)] Finalization error: \(error)")
         }
-        inputContinuation?.finish()
 
         // Wait for result task to complete with timeout
         let deadline = Task {
