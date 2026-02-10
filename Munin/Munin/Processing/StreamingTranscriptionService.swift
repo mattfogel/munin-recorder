@@ -77,38 +77,50 @@ final class StreamingTranscriptionService: @unchecked Sendable {
         self.locale = locale
     }
 
+    /// Find the matching supported locale by identifier (avoids Locale equality issues
+    /// where Locale.current carries extra properties like calendar/numbering that prevent Set.contains from matching)
+    private static func findSupportedLocale(for locale: Locale) async -> Locale? {
+        let supported = await SpeechTranscriber.supportedLocales
+        // Match by identifier string since Locale equality compares all properties
+        return supported.first { $0.identifier == locale.identifier }
+            ?? supported.first { $0.language.languageCode == locale.language.languageCode
+                && $0.language.region == locale.language.region }
+    }
+
     /// Check if the speech recognition model is installed for the current locale
     static func isModelInstalled(locale: Locale = .current) async -> Bool {
         let installed = await SpeechTranscriber.installedLocales
-        return installed.contains(locale)
+        return installed.contains { $0.identifier == locale.identifier }
     }
 
     /// Ensure the speech recognition model is downloaded and allocated for the given locale.
     /// Must be called before starting an analyzer.
     static func ensureModelAvailable(locale: Locale = .current) async throws {
-        let supported = await SpeechTranscriber.supportedLocales
-        guard supported.contains(locale) else {
+        guard let matchedLocale = await findSupportedLocale(for: locale) else {
+            let supported = await SpeechTranscriber.supportedLocales
             debugLog("Locale \(locale.identifier) not in supported locales: \(supported.map { $0.identifier })")
             throw TranscriptionError.localeNotSupported
         }
 
-        let installed = await SpeechTranscriber.installedLocales
-        debugLog("Speech model status — supported: \(supported.count) locales, installed: \(installed.map { $0.identifier })")
+        debugLog("Matched locale \(locale.identifier) → \(matchedLocale.identifier)")
 
-        // Create a transcriber to check allocation/trigger download
+        let installed = await SpeechTranscriber.installedLocales
+        debugLog("Speech model status — installed: \(installed.map { $0.identifier })")
+
+        // Create a transcriber with the matched locale to check allocation/trigger download
         let tempTranscriber = SpeechTranscriber(
-            locale: locale,
+            locale: matchedLocale,
             transcriptionOptions: [],
             reportingOptions: [],
             attributeOptions: []
         )
 
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [tempTranscriber]) {
-            debugLog("Downloading speech model for \(locale.identifier)...")
+            debugLog("Downloading speech model for \(matchedLocale.identifier)...")
             try await request.downloadAndInstall()
-            debugLog("Speech model download complete for \(locale.identifier)")
+            debugLog("Speech model download complete for \(matchedLocale.identifier)")
         } else {
-            debugLog("Speech model already available for \(locale.identifier)")
+            debugLog("Speech model already available for \(matchedLocale.identifier)")
         }
     }
 
@@ -121,8 +133,13 @@ final class StreamingTranscriptionService: @unchecked Sendable {
         debugLog("[\(speaker)] Ensuring speech model available for \(locale.identifier)...")
         try await Self.ensureModelAvailable(locale: locale)
 
+        // Use matched locale from supported set (avoids Locale equality issues)
+        guard let resolvedLocale = await Self.findSupportedLocale(for: locale) else {
+            throw TranscriptionError.localeNotSupported
+        }
+
         let newTranscriber = SpeechTranscriber(
-            locale: locale,
+            locale: resolvedLocale,
             transcriptionOptions: [],
             reportingOptions: [.volatileResults],
             attributeOptions: [.audioTimeRange]
