@@ -4,7 +4,7 @@ A macOS meeting recorder that keeps your data local and AI-accessible.
 
 **Why Munin?** Meeting transcription services lock your notes in walled gardens where they can't be queried by your own tools. Munin stores everything locally as plain markdown files, making your meeting history available to Claude Code, local search, and any other AI agent you choose to use.
 
-Records system audio + microphone, transcribes locally with whisper.cpp, and summarizes via Claude CLI. Your meetings, your files, your control.
+Records system audio + microphone, transcribes in real time using Apple's native speech recognition, and summarizes via Claude CLI. Your meetings, your files, your control.
 
 ## Current Status
 
@@ -15,7 +15,7 @@ Records system audio + microphone, transcribes locally with whisper.cpp, and sum
 - Auto-detect meetings via mic activity with floating prompt
 - Calendar auto-start: notifies before scheduled meetings with option to join & record
 - Custom floating notification panels (not system notifications)
-- Transcription via whisper.cpp
+- Streaming transcription via Apple SpeechAnalyzer (live during recording, speaker diarization)
 - Summarization via Claude CLI
 - Calendar integration for meeting names and participants
 
@@ -35,22 +35,26 @@ Records system audio + microphone, transcribes locally with whisper.cpp, and sum
                             └───────────┬───────────┘
                                         │
                             ┌───────────▼───────────┐
-                            │  AVAssetWriter        │
-                            │  → audio.m4a          │
-                            └───────────┬───────────┘
-                                        │
-              ┌─────────────────────────┼─────────────────────────┐
-              │                         │                         │
-              ▼                         ▼                         ▼
-        whisper.cpp              Claude CLI              ~/Meetings/
-        → transcript.md          → summary.md            DATE/TIME/
+                            │  AudioMixer           │
+                            │  (stereo mix + levels) │
+                            └──┬────────────────┬───┘
+                               │                │
+                ┌──────────────▼──┐    ┌───────▼───────────┐
+                │  AVAssetWriter  │    │  SpeechAnalyzer    │
+                │  → audio.m4a   │    │  (mic + system)    │
+                └──────────┬─────┘    │  → transcript.md   │
+                           │          └───────┬────────────┘
+              ┌────────────┼──────────────────┼──────────────┐
+              │            │                  │              │
+              ▼            ▼                  ▼              ▼
+        ~/Meetings/   Claude CLI        Live diarized   Speaker labels
+        DATE/TIME/    → summary.md      transcription   (Me / Them)
 ```
 
 ## Requirements
 
-- macOS 15+ (Core Audio Taps)
+- macOS 26+ (SpeechAnalyzer APIs + Core Audio Taps)
 - Xcode 16+
-- whisper.cpp with model
 - Claude CLI (authenticated)
 
 ## Setup
@@ -69,39 +73,23 @@ open Munin/Munin.xcodeproj
 - Xcode → Signing & Capabilities → set Team → enable "Automatically manage signing"
 - Ad-hoc signing breaks menubar icon and causes permission loops.
 
-### 3. Install whisper.cpp
-
-```bash
-git clone https://github.com/ggerganov/whisper.cpp
-cd whisper.cpp && make
-./models/download-ggml-model.sh base.en
-mkdir -p ~/.munin/models
-cp models/ggml-base.en.bin ~/.munin/models/
-```
-
-### 3b. (Optional but recommended) Install VAD model
-
-For better segmentation across silence, install the Silero VAD model:
-
-```bash
-mkdir -p ~/.munin/models
-cp path/to/ggml-silero-v6.2.0.bin ~/.munin/models/
-```
-
-### 4. Install Claude CLI
+### 3. Install Claude CLI
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 claude  # authenticate once
 ```
 
-### 5. Grant permissions
+### 4. Grant permissions
 
 On first run, grant:
 - Screen Recording (System Settings → Privacy & Security)
 - Microphone access
+- Speech Recognition (for live transcription)
 - Calendar access (optional, for auto-naming recordings)
 - Notifications (for completion alerts)
+
+The speech recognition model for your locale will be downloaded automatically on first recording.
 
 ## Usage
 
@@ -109,7 +97,7 @@ On first run, grant:
 2. Click "Start Recording"
 3. Have your meeting
 4. Click "Stop Recording"
-5. Wait for processing (Saving → Transcribing → Summarizing)
+5. Wait for processing (Saving → Finalizing transcription → Summarizing)
 6. Files saved to `~/Meetings/DATE/TIME-name/`
 
 ## Output Files
@@ -150,8 +138,8 @@ Munin/
 │   ├── CalendarService.swift          # EventKit integration
 │   └── CalendarAutoStartService.swift # Pre-meeting notifications
 ├── Processing/
-│   ├── ProcessRunner.swift      # Async subprocess wrapper
-│   ├── TranscriptionService.swift
+│   ├── ProcessRunner.swift                # Async subprocess wrapper
+│   ├── StreamingTranscriptionService.swift # SpeechAnalyzer streaming engine
 │   └── SummarizationService.swift
 ├── Storage/
 │   ├── MeetingStorage.swift
@@ -166,13 +154,12 @@ Munin/
 ### Future Enhancements
 - Smart meeting detection (Accessibility APIs to detect Zoom's "Meeting" menu, Teams windows)
 - Auto-stop recording when meeting ends
-- Speaker diarization using stereo channel separation
 - Add CLI args to simplify Claude Code calls? (e.g. if it's possible to not load plugins/mcps, not store history, etc)
 - Note-taking window when a meeting starts, let me change meeting name and take my own notes which will be combined with the meeting summary
-- Preferences window (storage location, whisper model, etc.)
+- Preferences window (storage location, etc.)
 - Global hotkey (Cmd+Shift+R)
-- Real-time transcription display
-- Switch to Apple SpeechAnalyzer API (macOS 26+) for faster streaming transcription
+- Real-time transcription display in UI
+- Settings toggle for transcription on/off
 
 
 
@@ -214,19 +201,9 @@ Stereo output (mic on left, system on right) with per-channel soft limiting. If 
 Uses Core Audio Taps for system audio capture. Microphone captured via AVAudioEngine. Output is stereo (mic=left, system=right) for speaker diarization, with soft limiting to prevent clipping.
 
 ### Transcription
-Converts m4a → wav via `afconvert`, then runs whisper.cpp with VTT + JSON + word timings.
-Word-level timings are re-segmented in-app to avoid long cues spanning silence.
-If `~/.munin/models/ggml-silero-v6.2.0.bin` exists, VAD is enabled to split on silence.
+Uses Apple's native `SpeechAnalyzer` + `SpeechTranscriber` APIs (macOS 26) for streaming transcription during recording. Two independent transcriber instances run in parallel — one for microphone ("Me") and one for system audio ("Them") — providing automatic speaker diarization.
 
-**Tuning knobs (transcription):**
-- `--max-len`: lower for shorter segments, higher for fewer splits.
-- VAD: `--vad-min-silence-duration-ms`, `--vad-max-speech-duration-s`, `--vad-threshold`, `--vad-speech-pad-ms`.
-- Word segmentation in `TranscriptionService`: `wordGapMs`, `punctuationGapMs`, `maxSegmentChars`.
-
-**Troubleshooting (transcription timing/segmentation):**
-- Lines appear too early: reduce `--max-len`, lower `--vad-max-speech-duration-s`, or reduce `wordGapMs`.
-- Over-splitting/fragmented lines: increase `--max-len`, raise `--vad-min-silence-duration-ms`, or increase `wordGapMs`.
-- Missing quiet speech: lower `--vad-threshold` or increase `--vad-speech-pad-ms`.
+Audio is converted from 48kHz float32 to 16kHz Int16 via `AVAudioConverter` before feeding to the analyzers. The speech model is downloaded automatically on first use via `AssetInventory`.
 
 ### Summarization
 Invokes `claude --print -p "..." < transcript.md` and captures stdout.
