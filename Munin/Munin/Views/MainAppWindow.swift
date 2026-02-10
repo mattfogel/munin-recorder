@@ -126,7 +126,7 @@ struct MainAppWindowContent: View {
         case .processing(let phase):
             switch phase {
             case .saving: return "Saving..."
-            case .transcribing: return "Transcribing..."
+            case .finalizing: return "Finalizing transcription..."
             case .summarizing: return "Summarizing..."
             }
         }

@@ -10,12 +10,11 @@ open Munin/Munin.xcodeproj
 ```
 
 **Requirements:**
-- macOS 15+ (Core Audio Taps), Xcode 16+
+- macOS 26+ (SpeechAnalyzer APIs), Xcode 26+
 - Real Apple Developer identity for code signing (free account works) — ad-hoc breaks menubar icon
-- whisper.cpp with model at `~/.munin/models/ggml-base.en.bin`
 - Claude CLI authenticated (`npm install -g @anthropic-ai/claude-code && claude`)
 
-**Permissions needed:** Screen Recording, Microphone, Calendar, Notifications (granted on first run)
+**Permissions needed:** Screen Recording, Microphone, Speech Recognition, Calendar, Notifications (granted on first run)
 
 ## Architecture
 
@@ -33,9 +32,12 @@ AppState (state machine: idle → recording → processing)
 AudioCaptureCoordinator
   ├─ SystemAudioCapture (Core Audio Taps + AVAudioEngine)
   ├─ AudioMixer (real-time stereo mixing + RMS levels via Accelerate/vDSP)
-  └─ AudioFileWriter (AVAssetWriter → AAC m4a)
-    ↓
-TranscriptionService (m4a → wav → whisper.cpp → transcript.md)
+  │   └─ Pre-interleave mono taps for mic & system channels
+  ├─ AudioFileWriter (AVAssetWriter → AAC m4a)
+  └─ StreamingTranscriptionService (×2: mic + system channels)
+        ├─ SpeechAnalyzer + SpeechTranscriber (native macOS 26 API)
+        ├─ Streams transcript segments during recording
+        └─ Finalizes on stop → transcript.md
     ↓
 SummarizationService (claude CLI → summary.md)
     ↓
@@ -46,15 +48,15 @@ Output: ~/Meetings/DATE/TIME-name/
 
 **Audio pipeline:**
 - All internal: 48kHz mono float32 PCM per source
-- Whisper input: 16kHz 16-bit PCM WAV (converted via afconvert)
 - File output: AAC m4a, 48kHz stereo, 128kbps
 
-**Transcription segmentation:**
-- Uses whisper.cpp `--split-on-word` plus VTT/JSON/word outputs.
-- Word-level timings are re-segmented in `TranscriptionService` to prevent long cues spanning silence.
-- If `~/.munin/models/ggml-silero-v6.2.0.bin` exists, VAD is enabled to split on silence.
-- Tuning knobs: whisper `--max-len`, VAD (`--vad-min-silence-duration-ms`, `--vad-max-speech-duration-s`, `--vad-threshold`, `--vad-speech-pad-ms`),
-  and word segmentation in `TranscriptionService` (`wordGapMs`, `punctuationGapMs`, `maxSegmentChars`).
+**Streaming transcription:**
+- Uses macOS 26 `SpeechAnalyzer` + `SpeechTranscriber` APIs for on-device, real-time transcription
+- Two independent transcriber instances: mic channel ("Me") and system channel ("Them") for diarization
+- Pre-interleave tap in `AudioMixer` feeds raw mono samples to each transcriber
+- Volatile results shown during recording; final results persisted to `transcript.md`
+- Model managed by OS via `AssetInventory` — auto-downloaded on first use
+- Word-level timestamps via `audioTimeRange` attribute on `AttributedString` runs
 
 **Threading:**
 - `@MainActor` on AppState, AppDelegate for UI/state
@@ -76,7 +78,8 @@ Output: ~/Meetings/DATE/TIME-name/
 | `/App/AppState.swift` | State machine, recording orchestration, audio levels |
 | `/App/DebugLog.swift` | `debugLog()` function, conditional on build config |
 | `/Audio/SystemAudioCapture.swift` | Core Audio Taps + mic via AVAudioEngine |
-| `/Audio/AudioMixer.swift` | Real-time stereo mixing, RMS level monitoring (~15Hz) |
+| `/Audio/AudioMixer.swift` | Real-time stereo mixing, RMS level monitoring (~15Hz), pre-interleave taps |
+| `/Audio/AudioCaptureCoordinator.swift` | Orchestrates capture, file writing, and streaming transcription |
 | `/Views/MainAppWindow.swift` | Main app window with recording controls |
 | `/Views/MeetingPromptPanel.swift` | NSPanel floating prompt for meeting detection |
 | `/Views/RecordingIndicatorWindow.swift` | NSPanel mini-window, hidden from screen share |
@@ -87,7 +90,7 @@ Output: ~/Meetings/DATE/TIME-name/
 | `/Services/CalendarService.swift` | EventKit integration for meeting names |
 | `/Services/CalendarAutoStartService.swift` | Pre-meeting notifications with join & record |
 | `/Processing/ProcessRunner.swift` | Async subprocess utility with timeout |
-| `/Processing/TranscriptionService.swift` | whisper.cpp wrapper |
+| `/Processing/StreamingTranscriptionService.swift` | SpeechAnalyzer wrapper for streaming transcription |
 | `/Processing/SummarizationService.swift` | Claude CLI wrapper (non-fatal on failure) |
 
 ## Code Style

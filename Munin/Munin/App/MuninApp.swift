@@ -119,7 +119,7 @@ struct MenuBarView: View {
     private func processingLabel(for phase: AppState.RecordingState.ProcessingPhase) -> String {
         switch phase {
         case .saving: return "Saving audio..."
-        case .transcribing: return "Transcribing..."
+        case .finalizing: return "Finalizing transcription..."
         case .summarizing: return "Summarizing..."
         }
     }

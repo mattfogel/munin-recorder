@@ -107,6 +107,10 @@ final class AudioMixer: @unchecked Sendable {
     // Output
     var outputHandler: ((CMSampleBuffer) -> Void)?
 
+    /// Pre-interleave tap: fires with per-channel mono float32 samples before stereo interleaving.
+    /// Parameters: (micSamples, systemSamples) — both at 48kHz mono.
+    var preInterleaveTapHandler: (([Float], [Float]) -> Void)?
+
     // Audio level monitoring (for VU meters)
     var levelHandler: ((AudioMixerLevels) -> Void)?
     private var lastLevelUpdate: CFAbsoluteTime = 0
@@ -408,6 +412,9 @@ final class AudioMixer: @unchecked Sendable {
             var micSamples = Array(micBuffer.prefix(bufferSize))
             micBuffer.removeFirst(bufferSize)
 
+            // Pre-interleave tap: deliver raw mono samples for streaming transcription
+            preInterleaveTapHandler?(micSamples, systemSamples)
+
             // Calculate and report audio levels (throttled to ~15 Hz)
             updateAudioLevels(micSamples: micSamples, systemSamples: systemSamples)
 
@@ -544,6 +551,9 @@ final class AudioMixer: @unchecked Sendable {
             if remaining > 0 {
                 var systemSamples = Array(self.systemBuffer.prefix(remaining))
                 var micSamples = Array(self.micBuffer.prefix(remaining))
+
+                // Pre-interleave tap: deliver remaining samples for streaming transcription
+                self.preInterleaveTapHandler?(micSamples, systemSamples)
 
                 // Apply soft limiting
                 self.micLimiter.process(&micSamples)
