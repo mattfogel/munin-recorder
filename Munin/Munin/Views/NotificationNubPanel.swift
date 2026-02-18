@@ -11,7 +11,7 @@ final class NotificationNubPanel: NSPanel {
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 80),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
+            styleMask: [.nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -32,8 +32,7 @@ final class NotificationNubPanel: NSPanel {
         // Visual style
         backgroundColor = .clear
         isOpaque = false
-        titlebarAppearsTransparent = true
-        titleVisibility = .hidden
+        hasShadow = false
 
         // Dark appearance
         appearance = NSAppearance(named: .darkAqua)

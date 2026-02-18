@@ -41,8 +41,6 @@ final class RecordingIndicatorWindow: NSPanel {
         backgroundColor = .clear
         isOpaque = false
         hasShadow = false
-        titlebarAppearsTransparent = true
-        titleVisibility = .hidden
 
         // Dark appearance
         appearance = NSAppearance(named: .darkAqua)

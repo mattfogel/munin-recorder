@@ -104,10 +104,17 @@ final class StreamingTranscriptionService: @unchecked Sendable {
 
         debugLog("Matched locale \(locale.identifier) → \(matchedLocale.identifier)")
 
+        // Check if model is already installed — skip AssetInventory if so
         let installed = await SpeechTranscriber.installedLocales
-        debugLog("Speech model status — installed: \(installed.map { $0.identifier })")
+        let alreadyInstalled = installed.contains { $0.identifier == matchedLocale.identifier }
+        if alreadyInstalled {
+            debugLog("Speech model already installed for \(matchedLocale.identifier), skipping download check")
+            return
+        }
 
-        // Create a transcriber with the matched locale to check allocation/trigger download
+        debugLog("Speech model not installed, checking AssetInventory...")
+
+        // Create a transcriber with the matched locale to trigger download
         let tempTranscriber = SpeechTranscriber(
             locale: matchedLocale,
             transcriptionOptions: [],

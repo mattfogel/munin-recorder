@@ -11,7 +11,7 @@ final class MeetingPromptPanel: NSPanel {
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 100),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
+            styleMask: [.nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -32,8 +32,7 @@ final class MeetingPromptPanel: NSPanel {
         // Visual style
         backgroundColor = .clear
         isOpaque = false
-        titlebarAppearsTransparent = true
-        titleVisibility = .hidden
+        hasShadow = false
 
         // Appearance
         appearance = NSAppearance(named: .darkAqua)
