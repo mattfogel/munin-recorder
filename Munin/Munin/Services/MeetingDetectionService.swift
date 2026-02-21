@@ -30,9 +30,9 @@ final class MeetingDetectionService: ObservableObject {
     }
 
     private func setupMicMonitor() {
-        micMonitor.onMicActivityChanged = { [weak self] isActive in
+        micMonitor.onMicActivityChanged = { [weak self] isActive, appName in
             Task { @MainActor [weak self] in
-                self?.handleMicActivityChanged(isActive)
+                self?.handleMicActivityChanged(isActive, appName: appName)
             }
         }
     }
@@ -63,7 +63,7 @@ final class MeetingDetectionService: ObservableObject {
         debugLog("Meeting detection disabled")
     }
 
-    private func handleMicActivityChanged(_ isActive: Bool) {
+    private func handleMicActivityChanged(_ isActive: Bool, appName: String?) {
         guard isActive else { return }
         guard isEnabled else { return }
 
@@ -79,14 +79,16 @@ final class MeetingDetectionService: ObservableObject {
             return
         }
 
-        // Show custom floating prompt
-        showMeetingPrompt()
+        // Only prompt if a known meeting app was identified
+        guard let appName else {
+            debugLog("Mic active but no meeting app detected, ignoring")
+            return
+        }
+
+        showMeetingPrompt(appName: appName)
     }
 
-    private func showMeetingPrompt() {
-        // Detect which app is using the microphone
-        let appName = micMonitor.detectMicUsingApp()
-
+    private func showMeetingPrompt(appName: String) {
         // Create panel if needed
         if promptPanel == nil {
             promptPanel = MeetingPromptPanel()
@@ -102,7 +104,7 @@ final class MeetingDetectionService: ObservableObject {
             }
         )
 
-        debugLog("Showing meeting detection prompt for app: \(appName ?? "unknown")")
+        debugLog("Showing meeting detection prompt for app: \(appName)")
     }
 
     private func handleStartRecording() {

@@ -1,15 +1,40 @@
 import Foundation
 import CoreAudio
 import AudioToolbox
-import AppKit
 
-/// Monitors microphone activity via Core Audio property listeners
+/// Monitors microphone activity via Core Audio property listeners.
+/// When mic becomes active, uses the Process Object API to identify which
+/// process is using input, and matches against a known meeting app allowlist.
 final class MicActivityMonitor: @unchecked Sendable {
     private var currentDeviceID: AudioDeviceID = kAudioObjectUnknown
     private var isMonitoring = false
     private let queue = DispatchQueue(label: "com.munin.micmonitor")
 
-    var onMicActivityChanged: ((Bool) -> Void)?
+    /// Callback: (isActive, appName?) — appName is non-nil only when a known meeting app is using the mic.
+    var onMicActivityChanged: ((Bool, String?) -> Void)?
+
+    private static let myPID = ProcessInfo.processInfo.processIdentifier
+
+    /// Known meeting apps: bundle ID prefix → display name.
+    /// Prefix matching catches Electron helper processes (e.g. com.tinyspeck.slackmacgap.helper).
+    private static let knownMeetingApps: [String: String] = [
+        // Native conferencing
+        "us.zoom":                      "Zoom",
+        "com.microsoft.teams":          "Microsoft Teams",
+        "com.webex":                    "Webex",
+        "com.tinyspeck.slackmacgap":    "Slack",
+        "com.hhopperbot.Discord":       "Discord",
+        "com.discord":                  "Discord",
+        "com.apple.FaceTime":           "FaceTime",
+        "com.skype.skype":              "Skype",
+        // Browsers (any browser mic usage treated as potential meeting)
+        "com.google.Chrome":            "Google Chrome",
+        "com.apple.Safari":             "Safari",
+        "company.thebrowser.Browser":   "Arc",
+        "com.brave.Browser":            "Brave",
+        "com.microsoft.edgemac":        "Microsoft Edge",
+        "org.mozilla.firefox":          "Firefox",
+    ]
 
     init() {}
 
@@ -111,9 +136,13 @@ final class MicActivityMonitor: @unchecked Sendable {
         currentDeviceID = deviceID
         addDeviceListener()
 
-        // Check current state
+        // Check current state — if mic already active, detect which app is using it
         let isActive = isMicCurrentlyActive()
         debugLog("Monitoring device \(deviceID), currently active: \(isActive)")
+        if isActive {
+            let appName = detectMeetingApp()?.name
+            onMicActivityChanged?(true, appName)
+        }
     }
 
     private func addDeviceListener() {
@@ -178,33 +207,87 @@ final class MicActivityMonitor: @unchecked Sendable {
         return status == noErr && isRunning != 0
     }
 
-    /// Detects which running app is likely using the microphone
-    /// Only returns app name if frontmost is a known conferencing/browser app (high confidence)
-    func detectMicUsingApp() -> String? {
-        let knownApps: Set<String> = [
-            "zoom.us", "Zoom",
-            "Microsoft Teams", "Teams",
-            "Webex", "Cisco Webex Meetings",
-            "Slack",
-            "Discord",
-            "FaceTime",
-            "Skype",
-            "Google Chrome", "Chrome",
-            "Safari",
-            "Firefox",
-            "Arc",
-            "Brave Browser",
-            "Microsoft Edge"
-        ]
+    // MARK: - Process Object API (Meeting App Detection)
 
-        // Only return app name if frontmost - don't guess
-        if let frontmost = NSWorkspace.shared.frontmostApplication,
-           let name = frontmost.localizedName,
-           knownApps.contains(name) {
-            return name
+    /// Enumerate CoreAudio process objects to find which known meeting app
+    /// is currently using microphone input. Returns nil if no match.
+    func detectMeetingApp() -> (bundleID: String, name: String)? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize
+        ) == noErr, dataSize > 0 else { return nil }
+
+        let count = Int(dataSize) / MemoryLayout<AudioObjectID>.size
+        var processIDs = [AudioObjectID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize, &processIDs
+        ) == noErr else { return nil }
+
+        for processID in processIDs {
+            // Check isRunningInput first (cheapest filter)
+            guard isProcessRunningInput(processID) else { continue }
+
+            // Skip self by PID
+            if getProcessPID(processID) == Self.myPID { continue }
+
+            guard let bundleID = getProcessBundleID(processID) else { continue }
+
+            // Match against allowlist (prefix match for Electron helper variants)
+            if let name = Self.knownMeetingApps.first(where: { bundleID.hasPrefix($0.key) })?.value {
+                debugLog("Meeting app detected: \(name) (\(bundleID))")
+                return (bundleID: bundleID, name: name)
+            } else {
+                debugLog("Non-meeting app using mic: \(bundleID)")
+            }
         }
+        return nil
+    }
 
-        return nil  // Shows generic "Meeting detected"
+    private func isProcessRunningInput(_ processID: AudioObjectID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyIsRunningInput,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var isRunning: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        let status = AudioObjectGetPropertyData(processID, &address, 0, nil, &size, &isRunning)
+        return status == noErr && isRunning != 0
+    }
+
+    private func getProcessPID(_ processID: AudioObjectID) -> pid_t {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyPID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var pid: pid_t = 0
+        var size = UInt32(MemoryLayout<pid_t>.size)
+        AudioObjectGetPropertyData(processID, &address, 0, nil, &size, &pid)
+        return pid
+    }
+
+    /// Read bundle ID from a CoreAudio process object.
+    /// kAudioProcessPropertyBundleID returns a +1 CFString — must use
+    /// Unmanaged.takeRetainedValue() to transfer ownership and avoid leaks.
+    private func getProcessBundleID(_ processID: AudioObjectID) -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioProcessPropertyBundleID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var rawPtr: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        let status = withUnsafeMutablePointer(to: &rawPtr) { ptr in
+            AudioObjectGetPropertyData(processID, &address, 0, nil, &size, ptr)
+        }
+        guard status == noErr, let unmanaged = rawPtr else { return nil }
+        return unmanaged.takeRetainedValue() as String
     }
 
     fileprivate func handleDefaultDeviceChanged() {
@@ -216,7 +299,8 @@ final class MicActivityMonitor: @unchecked Sendable {
     fileprivate func handleRunningStateChanged() {
         let isActive = isMicCurrentlyActive()
         debugLog("Mic activity changed: \(isActive)")
-        onMicActivityChanged?(isActive)
+        let appName = isActive ? detectMeetingApp()?.name : nil
+        onMicActivityChanged?(isActive, appName)
     }
 }
 
